@@ -2,7 +2,7 @@
 
 本仓库只发布原生插件、SDK 与独立代理。Codey 宿主的配合改动单独向 [SuperGness/codey](https://github.com/SuperGness/codey) 提交，不把整个 Antigravity 代理加入宿主仓库。
 
-**宿主 PR 链接：待补充。** 在 PR 的相关代码合入或用于测试构建前，不声明现有稳定版 Codey 已支持以下增强，也不依据插件包版本猜测宿主兼容性。
+**宿主 PR 链接：[SuperGness/codey#67](https://github.com/SuperGness/codey/pull/67)。** 在 PR 的相关代码合入或用于测试构建前，不声明现有稳定版 Codey 已支持以下增强，也不依据插件包版本猜测宿主兼容性。
 
 ## 宿主需要接入的契约
 
