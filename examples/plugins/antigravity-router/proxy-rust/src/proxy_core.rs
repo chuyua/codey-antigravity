@@ -5,10 +5,10 @@
 // streamAntigravity.
 use crate::catalog::{self, Effort};
 use crate::convert::{self, ConvertOptions};
-use crate::stream::{InterceptedCall, PumpOptions, pump_stream};
+use crate::stream::{pump_stream, InterceptedCall, PumpOptions};
 use crate::upstream::{fetch_upstream_sse, stream_stall_timeout_ms};
 use crate::writer::Writer;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

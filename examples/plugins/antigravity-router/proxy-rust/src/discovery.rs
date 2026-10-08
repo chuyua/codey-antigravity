@@ -2,7 +2,7 @@
 // dynamic runtime model resolution against fetchAvailableModels, and the
 // catalog TTL cache (port of upstream src/client/client.ts + models/discovery.ts).
 use crate::security::{safe_error, stable_project_id};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Mutex;

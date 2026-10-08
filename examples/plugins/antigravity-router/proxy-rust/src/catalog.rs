@@ -1239,10 +1239,8 @@ mod tests {
                 .context_window,
             0
         );
-        assert!(
-            build_catalog(&json!({}), &fallback_catalog())
-                .models
-                .is_empty()
-        );
+        assert!(build_catalog(&json!({}), &fallback_catalog())
+            .models
+            .is_empty());
     }
 }

@@ -1,6 +1,6 @@
 // Independent Google grounding plus the Responses web_search bridge.
 use futures_util::StreamExt;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
@@ -503,19 +503,17 @@ mod tests {
     async fn cancelled_search_does_not_send() {
         let c = CancellationToken::new();
         c.cancel();
-        assert!(
-            execute_search(
-                "unused",
-                "p",
-                &SearchOptions {
-                    query: "q".into(),
-                    ..Default::default()
-                },
-                c
-            )
-            .await
-            .unwrap_err()
-            .contains("cancelled")
-        );
+        assert!(execute_search(
+            "unused",
+            "p",
+            &SearchOptions {
+                query: "q".into(),
+                ..Default::default()
+            },
+            c
+        )
+        .await
+        .unwrap_err()
+        .contains("cancelled"));
     }
 }

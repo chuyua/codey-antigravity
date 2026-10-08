@@ -1,16 +1,16 @@
 // HTTP/WS server: OpenAI Responses (SSE + non-streaming), WebSocket Responses
 // contract (Codey local-router compatible), model catalog, health, usage,
 // doctor, image generation. Port of proxy/server.mjs + lib/ws.js contract.
-use crate::proxy_core::{self, ExecuteOutcome, RequestContext, SSE_END_SENTINEL, Sink};
-use crate::ws::{WsEvent, WsReader, WsWriter, accept_key};
+use crate::proxy_core::{self, ExecuteOutcome, RequestContext, Sink, SSE_END_SENTINEL};
+use crate::ws::{accept_key, WsEvent, WsReader, WsWriter};
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full, StreamBody};
-use hyper::Request;
 use hyper::body::{Frame, Incoming};
 use hyper::service::service_fn;
+use hyper::Request;
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::convert::Infallible;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -221,18 +221,15 @@ mod route_guard_tests {
             assert_eq!(model["contextWindow"], 524288);
             assert_eq!(model["max_output_tokens"], 12345);
         }
-        assert!(
-            data.iter()
-                .find(|m| m["id"] == "claude-future")
-                .unwrap()
-                .get("context_window")
-                .is_none()
-        );
-        assert!(
-            !data
-                .iter()
-                .any(|m| m["id"] == "gemini-image-only" || m["id"] == "gemini-3.7-flash")
-        );
+        assert!(data
+            .iter()
+            .find(|m| m["id"] == "claude-future")
+            .unwrap()
+            .get("context_window")
+            .is_none());
+        assert!(!data
+            .iter()
+            .any(|m| m["id"] == "gemini-image-only" || m["id"] == "gemini-3.7-flash"));
     }
     #[test]
     fn rejects_rebinding_hosts_and_wrong_port() {
