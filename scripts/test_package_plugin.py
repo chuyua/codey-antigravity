@@ -49,13 +49,13 @@ class PackageScopeTests(unittest.TestCase):
                 self.assertIn("Punycode", result.stderr)
 
     def test_ascii_and_punycode_scopes_preserve_the_target(self):
-        urls = ["https://TOKEN.sensenova.cn:443/v1/responses",
+        urls = ["https://TOKEN.example.com:443/v1/responses",
                 "https://xn--fa-hia.de/v1/responses",
                 "http://[::1]:8765/responses/compact"]
         result, manifest = self.package(urls)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(manifest["apiKeyUrls"], [
-            "https://token.sensenova.cn/v1/responses", urls[1], urls[2]])
+            "https://token.example.com/v1/responses", urls[1], urls[2]])
 
     def test_unsafe_or_non_response_targets_are_rejected(self):
         for url in ["http://example.com/responses", "https://user@example.com/responses",
