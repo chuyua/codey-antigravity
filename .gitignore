@@ -1,0 +1,9 @@
+**/target/
+**/dist/
+.runtime/
+*.codey-plugin
+*.zip
+auth.json
+antigravity-accounts.json
+antigravity-catalog-cache.json
+.env
