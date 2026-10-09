@@ -142,7 +142,7 @@ class ReleaseAbi(unittest.TestCase):
 
     def test_unsafe_configurations_are_rejected(self):
         cases = [[], {'baseUrl': 'https://evil.test/v1'}, {'baseUrl': 'http://127.0.0.1:0/v1'},
-                 {'baseUrl': 'http://127.0.0.1:08787/v1'}, {'models': []}, {'models': ['A', 'a']},
+                 {'baseUrl': 'http://127.0.0.1:028787/v1'}, {'models': []}, {'models': ['A', 'a']},
                  {'models': ['bad\nheader']}, {'models': [f'm{i}' for i in range(33)]},
                  {'retryOnce': True}, {'retryOnce': 2}, {'syncModels': 'true'}, {'secret': 'mock'},
                  {'enabled': True, 'lifecycleEnabled': False}, {'lifecycleEnabled': 'true'},
@@ -165,13 +165,26 @@ class ReleaseAbi(unittest.TestCase):
 
     def test_initial_bad_catalog_never_publishes_stale_models(self):
         for body in [{'data': []}, {'data': [{'id': 'A'}, {'id': 'a'}]},
-                     {'data': [{'id': f'm{i}'} for i in range(33)]},
                      {'data': [{'id': 'bad\nheader'}]}, {'error': 'unavailable'}]:
             with self.subTest(body=body), catalog(body) as (base, _):
                 with native({'baseUrl': base, 'models': ['retired']}) as plugin:
                     error = plugin.invoke('provider.describe', expected=1)
                     self.assertIn('model catalog unavailable', str(error))
                     self.assertNotIn('models', error)
+
+    def test_auth_catalog_over_limit_keeps_pinned_models_and_never_invents(self):
+        actual = [{'id': f'm{i}'} for i in range(35)]
+        actual.append({'id': 'gemini-special', 'context_window': 524288})
+        with catalog({'data': actual}) as (base, state):
+            with native({'baseUrl': base, 'models': ['retired', 'gemini-special', 'm34'],
+                         'declareHostCapabilities': True}) as plugin:
+                descriptor = plugin.invoke('provider.describe')
+                models = descriptor['models']
+                self.assertEqual(len(models), 32)
+                self.assertEqual(models[:2], ['gemini-special', 'm34'])
+                self.assertNotIn('retired', models)
+                self.assertEqual(descriptor['modelContexts']['gemini-special']['contextWindow'], 524288)
+                self.assertEqual(state['requests'], ['/v1/models?cached=1'])
 
     def test_optional_real_budgets_preserve_unknown_window(self):
         with catalog({'data': [{'id': 'known', 'context_window': 524288, 'max_output_tokens': 12345},

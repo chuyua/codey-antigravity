@@ -1,14 +1,14 @@
 {
   "_comments": {
     "baseUrl": "Local proxy only: http://127.0.0.1:<port>/v1. Restart plugin after edits.",
-    "syncModels": "Read an authenticated, already warmed proxy catalog when registering the route; an unavailable catalog prevents registration instead of restoring stale configured models. Disable only for a maintained manual list. Later updates use Codey route model synchronization.",
+    "syncModels": "Read authenticated, warmed proxy cache on registration. If there are more than 32 live models, prioritize configured live model IDs and add models in live catalog order, capped at 32 for Codey; the proxy API retains the full list. Cache unavailable still blocks first registration.",
     "declareHostCapabilities": "Advertise the optional modelContexts budget plus the (false) compaction/native-search flags. Keep false on released Codey: it rejects unknown descriptor fields and the route would fail to register. Set true only for a host build that implements the capability contract.",
     "declareWebsockets": "Advertise supportsWebsockets=true. Requires declareHostCapabilities and a host that accepts the field; leave false otherwise.",
     "routeId": "Optional exact Codey provider ID. Empty disables lifecycle handling; provider route still registers.",
     "retryOnce": "Explicit opt-in to one replay after 429. May duplicate tools or billing; keep false."
   },
   "lifecycleEnabled": true,
-  "baseUrl": "http://127.0.0.1:8787/v1",
+  "baseUrl": "http://127.0.0.1:28787/v1",
   "models": ["gemini-3.8-flash", "gemini-3.1-pro", "claude-sonnet-4-6", "claude-opus-4-6"],
   "syncModels": true,
   "declareHostCapabilities": false,

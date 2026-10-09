@@ -77,7 +77,7 @@ wait "$holder" 2>/dev/null || true
 
 python3 - "$state/proxy.json" "$$" <<'PY'
 import json, sys
-record = {"pid": int(sys.argv[2]), "exePath": "x", "authPath": "y", "startTimeUtc": "z", "port": 8787}
+record = {"pid": int(sys.argv[2]), "exePath": "x", "authPath": "y", "startTimeUtc": "z", "port": 28787}
 with open(sys.argv[1], "w", encoding="utf-8") as handle:
     json.dump(record, handle)
 PY

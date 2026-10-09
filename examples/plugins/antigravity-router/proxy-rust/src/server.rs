@@ -241,16 +241,16 @@ mod route_guard_tests {
     #[test]
     fn rejects_rebinding_hosts_and_wrong_port() {
         for host in [
-            "evil.test:8787",
+            "evil.test:28787",
             "127.0.0.1:9999",
-            "127.0.0.1.evil:8787",
+            "127.0.0.1.evil:28787",
             "localhost",
-            "localhost:8787@evil",
+            "localhost:28787@evil",
         ] {
-            assert!(!super::valid_local_host(host, 8787));
+            assert!(!super::valid_local_host(host, 28787));
         }
-        assert!(super::valid_local_host("127.0.0.1:8787", 8787));
-        assert!(super::valid_local_host("[::1]:8787", 8787));
+        assert!(super::valid_local_host("127.0.0.1:28787", 28787));
+        assert!(super::valid_local_host("[::1]:28787", 28787));
     }
 }
 
