@@ -41,23 +41,24 @@ pub fn build_image_generate_request(
     project: &str,
     aspect_ratio: &str,
 ) -> String {
-    let (request_id, session_id, _labels) =
-        convert::antigravity_request_envelope(model, false, false, 1, "0".into(), 0, None, None);
+    let request_id = format!(
+        "image_gen/{}/{}/1",
+        chrono::Utc::now().timestamp_millis(),
+        crate::security::stable_uuid(&format!("image:{}", convert::rand_u64()))
+    );
     json!({
         "project": project,
         "model": model,
         "request": {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "systemInstruction": {"role": "user", "parts": [{"text": crate::config::IMAGE_SYSTEM_INSTRUCTION}]},
             "generationConfig": {
                 "imageConfig": {"aspectRatio": aspect_ratio},
                 "candidateCount": 1
             }
         },
-        "requestType": "agent",
+        "requestType": "image_gen",
         "userAgent": "antigravity",
-        "requestId": request_id,
-        "_session": session_id
+        "requestId": request_id
     })
     .to_string()
 }
@@ -289,4 +290,32 @@ pub fn default_image_dir() -> PathBuf {
     std::env::var("AG_IMAGE_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(".pi").join("generated-images"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn image_wire_uses_official_envelope_without_system_instruction() {
+        let body: Value = serde_json::from_str(&build_image_generate_request(
+            "a cat",
+            crate::config::DEFAULT_IMAGE_MODEL,
+            "p",
+            "16:9",
+        ))
+        .unwrap();
+        assert_eq!(body["model"], "gemini-3.1-flash-image");
+        assert_eq!(body["requestType"], "image_gen");
+        assert!(body["requestId"]
+            .as_str()
+            .unwrap()
+            .starts_with("image_gen/"));
+        assert!(body["request"].get("systemInstruction").is_none());
+        assert!(body.get("_session").is_none());
+        assert_eq!(
+            body["request"]["generationConfig"]["imageConfig"]["aspectRatio"],
+            "16:9"
+        );
+        assert_eq!(body["request"]["contents"][0]["parts"][0]["text"], "a cat");
+    }
 }

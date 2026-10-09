@@ -1,6 +1,6 @@
-# 安装与使用（Windows x64）
+# 安装与使用
 
-先按照 [BUILDING.md](BUILDING.md) 生成便携 ZIP，或取得可信发布者构建的 ZIP。解压后执行：
+从对应提交的 GitHub Actions 获取 Windows x64、Linux x64、macOS arm64 或 x64 artifact，校验 `SHA256SUMS` 后解压便携 ZIP。编译在 CI 完成。Windows 解压后执行：
 
 ```powershell
 .\scripts\install.ps1 -Destination "$env:LOCALAPPDATA\CodeyAntigravity"
@@ -24,9 +24,11 @@ $env:ANTIGRAVITY_CLIENT_SECRET = '<authorized-oauth-client-secret>'
 
 默认 `syncModels=true`：启用前先运行代理并刷新其模型目录（`GET http://127.0.0.1:8787/v1/models?refresh=1`）。原生插件只读取代理缓存，不在宿主进程中发起 Google OAuth 请求。首次读取失败会阻止线路注册并显示错误，避免重新添加配置中的过时模型；同一运行实例随后读取失败时保留最后成功目录。原生线路清单上限为 32 个模型；目录超出时返回 `catalog_too_many_models`，不会静默截断。以后在线路设置中同步模型。只有明确维护手动目录时才设 `syncModels=false`；配置中的 `models` 此时才作为注册目录。
 
-更新后的宿主需识别 `supportsWebsockets` 能力字段，才能从插件自动开启 Responses WebSocket。当前代理未实现 `/v1/responses/compact`，所以插件声明 `supportsRemoteCompaction=false`；客户端可继续使用其本地历史压缩。代理已有 Responses `web_search` 转换，但尚未完成 Codey 原生搜索结果与引用契约的验证，因此声明 `supportsNativeWebSearch=false`，不能据此开启 Codey 原生 Web Search。
+默认情况下插件只输出已发布 Codey 能识别的描述字段，不需要任何宿主补丁即可注册线路。已发布 Codey 会对未知字段直接拒绝整份描述，所以能力字段默认全部关闭：`declareHostCapabilities=true` 才输出 `modelContexts` 和固定为 `false` 的 `supportsRemoteCompaction` / `supportsNativeWebSearch`；`declareWebsockets=true`（需先打开前者）才额外声明 `supportsWebsockets=true`。代理未实现 `/v1/responses/compact`，也没有验证 Codey 原生搜索结果与引用契约，因此这两项不会声明为支持。
 
-需要搜索时可以调用代理的显式 `POST /v1/search`，例如在代理已运行并完成登录的终端执行；`ANTIGRAVITY_NO_SEARCH_TOOL=1` 只禁用模型侧搜索工具，不影响这个显式接口：
+新建 Antigravity 线路的三项能力默认关闭。升级已有线路时，在宿主线路设置中关闭曾开启的 WebSocket、远程压缩和原生搜索并保存，按界面提示重启。宿主 PR #67 已关闭，本插件不依赖它。旧宿主无法接受 `modelContexts`，窗口沿用其内置值；代理仍返回上游确认的窗口元数据，插件不伪造窗口。
+
+代理默认关闭模型侧搜索工具；需要显式搜索时可调用 `POST /v1/search`。只有设置 `ANTIGRAVITY_NO_SEARCH_TOOL=0` 并重新启动代理，才启用模型侧搜索工具；`=1` 强制关闭，不影响这个显式接口：
 
 ```powershell
 Invoke-RestMethod -Uri 'http://127.0.0.1:8787/v1/search' -Method Post -ContentType 'application/json' -Body '{"query":"最新 Rust stable 版本"}'
@@ -44,4 +46,19 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8787/v1/search' -Method Post -ContentTy
 
 启动和停止脚本检查可执行路径、PID 创建时间、端口归属及健康服务标识；遇到占用端口会拒绝操作。它们不会创建开机任务。默认账号及模型缓存位于 `~/.pi/agent`，启动脚本生成的图片与进程记录位于安装目录 `.runtime`；自定义 `-AuthPath` 时代理缓存放在该账号文件所在目录。账号文件含可刷新令牌，限制本地访问并保留备份。停用或卸载原生插件不会停止代理，也不会删除代理账号、图片或 Codey 保留的数据与日志。
 
-代理支持 HTTP/SSE 和 Codey WebSocket Responses，以及显式搜索、图片、模型、usage 与 doctor 接口；拒绝带 Origin 的浏览器调用。远程图片只允许公有地址，图片镜像默认关闭；只有显式设置 `AG_IMAGE_MIRROR=1` 和 `HFSY_API_KEY` 才会上传。`AG_DEBUG` 只记录脱敏计数。可用 `ANTIGRAVITY_NO_EXTRA_TOOLS=1`，或分别用 `ANTIGRAVITY_NO_SEARCH_TOOL=1` / `ANTIGRAVITY_NO_IMAGE_TOOL=1` 禁用模型侧额外工具；显式搜索和图片命令仍可使用。
+代理默认使用 HTTP/SSE；WebSocket 握手默认拒绝，仅 `ANTIGRAVITY_ENABLE_WEBSOCKETS=1` 时启用，宿主开关和插件声明也需明确兼容。代理保留显式搜索、图片、模型、usage 与 doctor 接口；拒绝带 Origin 的浏览器调用。远程图片只允许公有地址，图片镜像默认关闭；只有显式设置 `AG_IMAGE_MIRROR=1` 和 `HFSY_API_KEY` 才会上传。`AG_DEBUG` 只记录脱敏计数。可用 `ANTIGRAVITY_NO_EXTRA_TOOLS=1` 关闭全部模型侧额外工具，或 `ANTIGRAVITY_NO_IMAGE_TOOL=1` 单独关闭图片工具；显式搜索和图片命令仍可使用。
+
+## macOS / Linux
+
+选择与 CPU 架构一致的包。POSIX 运行脚本需要 Bash、Python 3、curl、lsof；macOS 可用系统自带 lsof，Linux 按发行版安装。按用户授权的 OAuth 客户端设置相同环境变量后执行：
+
+```bash
+./scripts/install.sh --destination "$HOME/CodeyAntigravity"
+cd "$HOME/CodeyAntigravity"
+./bin/antigravity-proxy login --manual
+./start-proxy.sh
+curl -fsS 'http://127.0.0.1:8787/v1/models?refresh=1'
+./stop-proxy.sh
+```
+
+在代理运行期间导入对应平台 `.codey-plugin`。自定义启动参数为 `--port`、`--auth`、`--state-dir`；账号、目录预热、能力默认与升级步骤同 Windows。Apple 产物是分别构建的 arm64 和 x64 包，未做 Apple 签名或公证。

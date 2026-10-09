@@ -6,6 +6,12 @@ use tokio_util::sync::CancellationToken;
 
 const SYSTEM: &str = "You are an expert deep-research investigator and technical analyst. Use Google Search Grounding for rich, high-signal, multi-perspective facts. Formulate distinct targeted queries; prioritize technical details, benchmarks, developer issues and community feedback. Structure clean Markdown with direct source citations.";
 pub const SEARCH_TIMEOUT_SECS: u64 = 90;
+// v0.10 preference order; candidates still require this account's live directory.
+const SEARCH_MODEL_FALLBACKS: [&str; 3] = [
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-3-flash",
+];
 
 #[derive(Default, Clone)]
 pub struct SearchOptions {
@@ -375,7 +381,7 @@ fn search_models(directory: &Value) -> Vec<String> {
     let Some(raw) = directory["models"].as_object() else {
         return vec![];
     };
-    grouped
+    let mut models: Vec<String> = grouped
         .models
         .iter()
         .filter(|m| m.id.starts_with("gemini-"))
@@ -390,7 +396,14 @@ fn search_models(directory: &Value) -> Vec<String> {
             }
             Some(runtime.clone())
         })
-        .collect()
+        .collect();
+    models.sort_by_key(|model| {
+        SEARCH_MODEL_FALLBACKS
+            .iter()
+            .position(|preferred| *preferred == model.as_str())
+            .unwrap_or(SEARCH_MODEL_FALLBACKS.len())
+    });
+    models
 }
 pub async fn run_web_search(
     token: &str,
@@ -462,6 +475,27 @@ mod tests {
         );
         assert!(body["request"]["tools"][0].get("googleSearch").is_some());
         assert!(search_models(&json!({"models":{"claude-sonnet-4-6":{}}})).is_empty());
+    }
+    #[test]
+    fn search_prefers_upstream_fallbacks_but_keeps_live_model_guards() {
+        let models = search_models(&json!({"models":{
+            "gemini-3-flash":{}, "gemini-3.1-flash-lite":{}, "gemini-3.5-flash-lite":{},
+            "gemini-4-flash-high":{}, "gemini-3-pro-image":{}
+        }}));
+        assert_eq!(
+            models
+                .iter()
+                .take(3)
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            SEARCH_MODEL_FALLBACKS.to_vec()
+        );
+        assert!(models.contains(&"gemini-4-flash-high".to_string()));
+        let disabled = search_models(&json!({"models":{
+            "gemini-3.5-flash-lite":{"supportsGoogleSearch":false},
+            "gemini-3.1-flash-lite":{}
+        }}));
+        assert_eq!(disabled, vec!["gemini-3.1-flash-lite"]);
     }
     #[test]
     fn grounding_citations_preserve_utf8_parts_source_gaps_and_legacy_shape() {

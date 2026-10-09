@@ -7,3 +7,5 @@ auth.json
 antigravity-accounts.json
 antigravity-catalog-cache.json
 .env
+__pycache__/
+*.py[cod]

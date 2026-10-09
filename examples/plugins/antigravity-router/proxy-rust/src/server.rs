@@ -139,7 +139,14 @@ async fn route(
         && (path == "/responses" || path == "/v1/responses");
 
     let result = if is_ws_upgrade {
-        Ok(handle_websocket_upgrade(state, req).await)
+        if crate::config::ag_env("ENABLE_WEBSOCKETS").as_deref() == Some("1") {
+            Ok(handle_websocket_upgrade(state, req).await)
+        } else {
+            Ok(error_json(
+                400,
+                "Responses WebSocket is disabled by default; use HTTP Responses or explicitly set ANTIGRAVITY_ENABLE_WEBSOCKETS=1",
+            ))
+        }
     } else {
         match (&method, path.as_str()) {
             (&hyper::http::Method::GET, "/health") => handle_health(&state).await,

@@ -56,9 +56,11 @@ const upstream = createServer((req, res) => {
       // must have normalized it).
       const contents = parsed.request?.contents || [];
       const probe = contents.flatMap(t => t.parts || []).map(p => p.text || "").join(" ");
-      if (probe.includes("unicode-probe") || probe.includes("late-error-probe") || probe.includes("truncated-probe")) {
+      if (["unicode-probe", "late-error-probe", "truncated-probe", "bare-error-probe", "premature-eos-probe", "no-newline-probe"].some(p => probe.includes(p))) {
         res.writeHead(200, {"Content-Type":"text/event-stream"});
-        const record = Buffer.from(`data: ${JSON.stringify({response:{candidates:[{content:{parts:[{text:"中文🙂文本"}]},finishReason:"STOP"}]}})}\n\n`);
+        if (probe.includes("bare-error-probe")) {res.end('{\n"error":{"code":429,"message":"bare mock error"}\n}');return;}
+        const candidate = {content:{parts:[{text:"中文🙂文本"}]}, ...(probe.includes("premature-eos-probe") ? {} : {finishReason:"STOP"})};
+        const record = Buffer.from(`data: ${JSON.stringify({response:{candidates:[candidate]}})}${probe.includes("no-newline-probe") ? "" : "\n\n"}`);
         for (let i=0; i<record.length; i++) res.write(record.subarray(i,i+1));
         if (probe.includes("late-error-probe")) res.write('data: {"error":{"message":"late mock error"}}\n\n');
         if (probe.includes("truncated-probe")) res.write('data: {"response":');
@@ -98,7 +100,7 @@ const upstream = createServer((req, res) => {
     }
     if (req.url.startsWith("/v1internal:generateContent")) {
       const parsed=JSON.parse(body);
-      if (parsed.model === "gemini-3-flash") {res.writeHead(404);res.end("model unavailable");return;}
+      if (parsed.model === "gemini-3.5-flash-lite") {res.writeHead(404);res.end("model unavailable");return;}
       res.writeHead(200,{"Content-Type":"application/json"});res.end(JSON.stringify({response:{candidates:[{content:{parts:[{text:"Grounded mock answer"}]},groundingMetadata:{groundingChunks:[{web:{uri:"https://example.org/source",title:"Mock Source"}}],webSearchQueries:["mock query"]}}]}}));return;
     }
     if (req.url.startsWith("/v1internal:fetchAvailableModels")) {
@@ -106,6 +108,8 @@ const upstream = createServer((req, res) => {
       res.end(JSON.stringify({
         defaultAgentModelId: "gemini-3.8-flash-medium",
         models: {
+          "gemini-3.5-flash-lite": { displayName: "Gemini 3.5 Flash Lite", supportsGrounding: true },
+          "gemini-3.1-flash-lite": { displayName: "Gemini 3.1 Flash Lite", supportsGoogleSearch: true },
           "gemini-3.8-flash-low": { displayName: "Gemini 3.8 Flash (Low)", model: "MODEL_PLACEHOLDER_M320", supportsImages: true, supportsThinking: true, quotaInfo: { remainingFraction: 0.77, resetTime: "2026-09-28T00:00:00Z" } },
           "gemini-3.8-flash-medium": { displayName: "Gemini 3.8 Flash (Medium)", model: "MODEL_PLACEHOLDER_M319", supportsImages: true },
           "gemini-3.8-flash-high": { displayName: "Gemini 3.8 Flash (High)", model: "MODEL_PLACEHOLDER_M318" },
@@ -190,6 +194,9 @@ proxy = spawn(RUST_EXE, ["serve", "--port", String(proxyPort), "--auth", authPat
     ...cleanEnv,
     AG_IMAGE_MIRROR: "0",
     AG_DEBUG: "1",
+    ANTIGRAVITY_NO_SEARCH_TOOL: "0",
+    ANTIGRAVITY_ENABLE_WEBSOCKETS: "1",
+    NO_PROXY: "127.0.0.1,localhost,::1",
     PI_CODING_AGENT_DIR: dir,
     AG_IMAGE_DIR: join(dir, "images"),
     ANTIGRAVITY_MAX_BODY_MB: "1",
@@ -264,11 +271,29 @@ await test("POST /responses streams Responses events with wire fingerprint label
   assert.equal(call.body.request.labels.used_claude, "false");
   assert.match(call.body.requestId, /^agent\//);
   assert.match(call.body.request.labels.request_id, /-\d+$/);
+  assert.ok(BigInt(call.body.request.sessionId) >= -(1n << 63n));
+  assert.ok(BigInt(call.body.request.sessionId) <= (1n << 63n) - 1n);
   assert.equal(call.headers["user-agent"], "antigravity/cli/1.2.4 (aidev_client; os_type=linux; arch=amd64; cl=982146307; auth_method=consumer)");
   assert.equal(call.body.project, "mock-project-42", "projectId discovered via loadCodeAssist");
   // thinkingConfig for the routed low runtime
   assert.equal(call.body.request.generationConfig.thinkingConfig.thinkingBudget, 1000);
   assert.equal(call.body.request.generationConfig.maxOutputTokens, 65536);
+});
+
+await test("session_id remains stable across turns and uses upstream signed int64 hashing", async () => {
+  for (const seed of ["isolated-session", "-9223372036854775808"]) {
+    const before = upstreamLog.length;
+    for (const input of ["first turn", [{type:"message",role:"user",content:"different history"}, {type:"message",role:"assistant",content:"answer"}, {type:"message",role:"user",content:"next"}]]) {
+      const res = await fetch(`${BASE}/responses`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"gemini-3.8-flash", stream:false, session_id:seed, input})});
+      assert.equal(res.status, 200); await res.json();
+    }
+    const calls = upstreamLog.slice(before).filter(c => c.url.startsWith("/v1internal:streamGenerateContent"));
+    assert.equal(calls.length, 2);
+    const expected = /^-?\d+$/.test(seed) ? seed : crypto.createHash("sha256").update(`antigravity:session:${seed}`).digest().readBigInt64LE(0).toString();
+    assert.equal(calls[0].body.request.sessionId, expected);
+    assert.equal(calls[1].body.request.sessionId, expected);
+    assert.equal(calls[0].body.request.labels.trajectory_id, calls[1].body.request.labels.trajectory_id);
+  }
 });
 
 // --- 3. item_id stability + tool loop (thought signature echo) ------------------
@@ -425,10 +450,14 @@ await test("POST /v1/images/generations returns b64 image", async () => {
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.ok(body.data[0].b64_json.length > 0);
-  assert.equal(body.model, "gemini-3-pro-image");
+  assert.equal(body.model, "gemini-3.1-flash-image");
   const call = imageModelCalls.length && upstreamLog.filter((l) => l.body?.request?.generationConfig?.imageConfig).pop();
   assert.ok(call, "imageConfig in request");
   assert.equal(call.body.request.generationConfig.imageConfig.aspectRatio, "16:9");
+  assert.equal(call.body.requestType, "image_gen");
+  assert.match(call.body.requestId, /^image_gen\//);
+  assert.equal(call.body.request.systemInstruction, undefined);
+  assert.equal(call.body._session, undefined);
 });
 
 // --- 10. /usage -----------------------------------------------------------------------
@@ -455,6 +484,44 @@ await test("GET /doctor returns sanitized diagnostics", async () => {
 });
 
 // --- 12. WS contract ---------------------------------------------------------------------
+await test("default proxy disables WebSocket, hosted search and remote compaction", async () => {
+  const defaultDir = mkdtempSync(join(dir, "defaults-"));
+  const defaultAuth = join(defaultDir, "auth.json");
+  writeFileSync(defaultAuth, JSON.stringify({antigravity:{type:"oauth",...first,projectId:"mock-project-42"}}));
+  const defaultPort = await reservePort();
+  const defaultProxy = spawn(RUST_EXE, ["serve", "--port", String(defaultPort), "--auth", defaultAuth], {
+    env:{...cleanEnv,PI_CODING_AGENT_DIR:defaultDir,AG_IMAGE_DIR:join(defaultDir,"images"),
+      ANTIGRAVITY_BASE_URL:`http://127.0.0.1:${upstreamPort}`,AG_TEST_ALLOW_INSECURE_BASE:"1",NO_PROXY:"127.0.0.1,localhost,::1"},
+    cwd:defaultDir,stdio:["ignore","ignore","ignore"],
+  });
+  try {
+    const base = `http://127.0.0.1:${defaultPort}`;
+    await waitHttp(`${base}/health`);
+    const wsStatus = await new Promise((resolve,reject)=>{
+      const req=httpRequest(`${base}/v1/responses`,{headers:{Upgrade:"websocket",Connection:"Upgrade",
+        "Sec-WebSocket-Version":"13","Sec-WebSocket-Key":crypto.randomBytes(16).toString("base64")}},
+        res=>{res.resume();res.on("end",()=>resolve(res.statusCode));});
+      req.on("upgrade",(_res,socket)=>{socket.destroy();reject(new Error("Default WebSocket unexpectedly enabled"));});
+      req.setTimeout(5000,()=>req.destroy(new Error("Default WebSocket check timed out")));
+      req.on("error",reject);req.end();
+    });
+    assert.equal(wsStatus,400);
+    const before=upstreamLog.length;
+    const response=await fetch(`${base}/v1/responses`,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"gemini-3.8-flash",stream:false,input:"execute search",tools:[{type:"web_search"}]})});
+    assert.equal(response.status,200);assert.equal((await response.json()).status,"completed");
+    const generated=upstreamLog.slice(before).filter(c=>c.url.startsWith("/v1internal:streamGenerateContent"));
+    assert.ok(generated.length);
+    assert.ok(generated.every(c=>!(c.body.request.tools||[]).some(t=>t.google_search||
+      (t.functionDeclarations||[]).some(d=>["google_search","web_search"].includes(d.name)))));
+    assert.ok(!upstreamLog.slice(before).some(c=>c.url.startsWith("/v1internal:generateContent")));
+    const compact=await fetch(`${base}/v1/responses/compact`,{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
+    assert.equal(compact.status,404);await compact.text();
+  } finally {
+    if(defaultProxy.exitCode===null){const closed=once(defaultProxy,"close");defaultProxy.kill();await closed;}
+  }
+});
+
 await test("WebSocket responses: response.create -> bare JSON frames with stream_id", async () => {
   const key = crypto.randomBytes(16).toString("base64");
   const ws = await connectWs(`ws://127.0.0.1:${proxyPort}/v1/responses`, key);
@@ -498,7 +565,7 @@ await test("WebSocket responses: response.create -> bare JSON frames with stream
 
 await test("independent search, fallback and google_search interception", async()=>{
  const res=await fetch(`${BASE}/v1/search`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:"mock query",instruction:"Use citations",urls:["https://example.org"],thinking:true})});assert.equal(res.status,200);const result=await res.json();assert.equal(result.text,"Grounded mock answer");assert.deepEqual(result.sources,[{index:0,title:"Mock Source",url:"https://example.org/source"}]);assert.ok(result.result.includes("Sources"));
- const calls=upstreamLog.filter(c=>c.url.startsWith("/v1internal:generateContent"));assert.ok(calls.some(c=>c.body.model==="gemini-3-flash"));assert.ok(calls.some(c=>c.body.model==="gemini-3.6-flash-low"));assert.ok(calls.at(-1).body.request.tools.some(t=>t.urlContext));
+ const calls=upstreamLog.filter(c=>c.url.startsWith("/v1internal:generateContent"));assert.deepEqual(calls.map(c=>c.body.model),["gemini-3.5-flash-lite","gemini-3.1-flash-lite"]);assert.ok(calls.at(-1).body.request.tools.some(t=>t.urlContext));
  const before=upstreamLog.length;const bridge=await fetch(`${BASE}/responses`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"gemini-3.8-flash-medium",stream:true,input:"execute search",tools:[{type:"function",name:"google_search",parameters:{type:"object",properties:{query:{type:"string"}}}}]})});const text=await readSse(bridge);assert.ok(text.includes("response.completed"));assert.ok(upstreamLog.slice(before).some(c=>c.url.startsWith("/v1internal:generateContent")));assert.ok(upstreamLog.slice(before).some(c=>c.body?.request?.contents?.some(t=>(t.parts||[]).some(p=>p.functionResponse?.name==="google_search"))));
 });
 await test("Host/Origin, body cap and private image SSRF guard",async()=>{
@@ -514,13 +581,15 @@ await test("429 account failover also switches project",async()=>{
  try{const res=await fetch(`${BASE}/responses`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"gemini-3.8-flash",stream:false,input:"quota-failover"})});assert.equal(res.status,200);assert.equal((await res.json()).status,"completed");const calls=upstreamLog.slice(before).filter(c=>c.url.startsWith("/v1internal:streamGenerateContent"));assert.ok(calls.some(c=>c.headers.authorization==="Bearer ya29.mock-access-token"));const retry=calls.find(c=>c.headers.authorization==="Bearer ya29.mock-access-2");assert.ok(retry);assert.equal(retry.body.project,"mock-project-99");}finally{quotaFailover=false;}
 });
 await test("Unicode stream and terminal failures survive full HTTP orchestration",async()=>{
- for(const probe of ["unicode-probe","late-error-probe","truncated-probe"]){
+ for(const probe of ["unicode-probe","late-error-probe","truncated-probe","bare-error-probe","premature-eos-probe","no-newline-probe"]){
   const res=await fetch(`${BASE}/responses`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"gemini-3.8-flash",stream:true,input:probe})});
   const events=eventsOf(await res.text());
-  const failed=probe!=="unicode-probe";
+  const failed=!["unicode-probe","no-newline-probe"].includes(probe);
   assert.equal(events.filter(e=>e.type==="response.failed").length,failed?1:0);
   assert.equal(events.filter(e=>e.type==="response.completed").length,failed?0:1);
   if(!failed)assert.equal(events.find(e=>e.type==="response.completed").response.output[0].content[0].text,"中文🙂文本");
+  if(probe==="bare-error-probe")assert.match(JSON.stringify(events),/bare mock error/);
+  if(probe==="premature-eos-probe")assert.match(JSON.stringify(events),/without a finish reason/);
  }
 });
 } catch(e) {failures++;console.error(`Harness failed: ${e.message}`);}

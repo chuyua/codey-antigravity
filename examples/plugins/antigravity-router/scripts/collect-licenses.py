@@ -11,7 +11,7 @@ import tomllib
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('output', type=pathlib.Path)
-parser.add_argument('--target', default='x86_64-pc-windows-gnu')
+parser.add_argument('--target', required=True)
 parser.add_argument('--cargo', default='cargo')
 args = parser.parse_args()
 example = pathlib.Path(__file__).resolve().parent.parent

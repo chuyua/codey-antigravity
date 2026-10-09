@@ -875,6 +875,26 @@ pub fn rand_u64() -> u64 {
     rand::thread_rng().next_u64()
 }
 
+/// v0.10 wire session IDs are signed int64 strings, never UUIDs or unsigned u64.
+/// Hash the trimmed seed exactly as upstream (SHA-256, first 8 bytes, little endian).
+pub fn to_int64_session_id(seed: Option<&str>) -> String {
+    use sha2::{Digest, Sha256};
+    let Some(seed) = seed.map(str::trim).filter(|s| !s.is_empty()) else {
+        return (rand_u64() as i64).to_string();
+    };
+    let digits = seed.strip_prefix('-').unwrap_or(seed);
+    if !digits.is_empty()
+        && digits.bytes().all(|b| b.is_ascii_digit())
+        && seed.parse::<i64>().is_ok()
+    {
+        return seed.to_string();
+    }
+    let hash = Sha256::digest(format!("antigravity:session:{seed}").as_bytes());
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&hash[..8]);
+    i64::from_le_bytes(bytes).to_string()
+}
+
 /// Build the wire envelope labels + request/session ids
 /// (port of upstream utils/util.ts antigravityRequestEnvelope).
 pub fn antigravity_request_envelope(
@@ -892,7 +912,7 @@ pub fn antigravity_request_envelope(
         .unwrap_or_else(|| crate::security::stable_uuid(&format!("a:{}", rand_u64())));
     let trajectory_id =
         trajectory_id.unwrap_or_else(|| crate::security::stable_uuid(&format!("t:{}", rand_u64())));
-    let session_id = rand_u64().to_string();
+    let session_id = to_int64_session_id(None);
 
     let claude_label = if is_claude { "true" } else { "false" };
     let non_gemini_label = if is_non_gemini || is_claude {
@@ -1156,19 +1176,26 @@ pub fn responses_to_gemini_body(
                 .count()
         })
         .unwrap_or(0);
-    let (conversation_id, trajectory_id) = match body
+    let explicit_session = body
         .get("session_id")
         .and_then(Value::as_str)
         .map(str::trim)
-        .filter(|s| !s.is_empty())
-    {
+        .filter(|s| !s.is_empty());
+    let first_text = first_user_text(body);
+    let (conversation_id, trajectory_id) = match explicit_session {
         Some(seed) => (
             stable_uuid(&format!("antigravity:conv:session:{seed}")),
             stable_uuid(&format!("antigravity:traj:session:{seed}")),
         ),
-        None => resolve_session_trajectory(first_user_text(body).as_deref()),
+        None => resolve_session_trajectory(first_text.as_deref()),
     };
-    let (request_id, session_id, mut labels) = antigravity_request_envelope(
+    let fallback_seed = first_text
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| format!("user:{}", s.chars().take(64).collect::<String>()));
+    let session_id = to_int64_session_id(explicit_session.or(fallback_seed.as_deref()));
+    let (request_id, _, mut labels) = antigravity_request_envelope(
         runtime_model,
         requested.starts_with("claude-") || runtime_model.starts_with("claude-"),
         requested.starts_with("claude-")
@@ -1433,6 +1460,47 @@ mod tests {
     }
 
     #[test]
+    fn session_ids_match_upstream_signed_int64_contract() {
+        for seed in ["0", "-9223372036854775808", "9223372036854775807", "00042"] {
+            assert_eq!(to_int64_session_id(Some(seed)), seed);
+        }
+        for seed in [
+            "9223372036854775808",
+            "-9223372036854775809",
+            "+42",
+            "example",
+            "会话🙂",
+        ] {
+            let id = to_int64_session_id(Some(seed));
+            assert!(id.parse::<i64>().is_ok());
+            assert_eq!(id, to_int64_session_id(Some(&format!(" {seed} "))));
+        }
+        assert!(to_int64_session_id(None).parse::<i64>().is_ok());
+    }
+
+    #[test]
+    fn response_history_seed_survives_followup() {
+        let opts = ConvertOptions {
+            requested_model: "gemini-3.8-flash".into(),
+            effort: None,
+            prompt: String::new(),
+            image_tool: false,
+            inject_image_tool: false,
+        };
+        let first = json!({"input":"first user message"});
+        let next = json!({"input":[{"role":"user","content":"first user message"},
+            {"role":"assistant","type":"message","content":"answer"},
+            {"role":"user","content":"followup"}]});
+        let wire = |body: &Value| {
+            body_of(&responses_to_gemini_body(body, "p", "gemini-3.8-flash-low", &opts).unwrap())
+        };
+        assert_eq!(
+            wire(&first)["request"]["sessionId"],
+            wire(&next)["request"]["sessionId"]
+        );
+    }
+
+    #[test]
     fn web_search_synthetic_declaration() {
         let tools = json!([
             {"type": "web_search"},
@@ -1477,6 +1545,11 @@ fn session_seed_and_previous_execution_survive_multiturn() {
     assert_eq!(
         first["request"]["labels"]["trajectory_id"],
         next["request"]["labels"]["trajectory_id"]
+    );
+    assert_eq!(first["request"]["sessionId"], next["request"]["sessionId"]);
+    assert_eq!(
+        first["request"]["sessionId"],
+        to_int64_session_id(Some("isolated-session"))
     );
     assert_eq!(
         next["request"]["labels"]["last_execution_id"],

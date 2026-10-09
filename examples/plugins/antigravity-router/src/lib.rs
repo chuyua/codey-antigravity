@@ -21,6 +21,8 @@ struct AntigravityRouter {
     base_url: String,
     models: Vec<String>,
     model_contexts: BTreeMap<String, codey_plugin_sdk::provider::ModelContext>,
+    declare_host_capabilities: bool,
+    declare_websockets: bool,
     route_id: String,
     retry_once: bool,
     sync_models: bool,
@@ -213,6 +215,8 @@ impl Plugin for AntigravityRouter {
                 "routeId",
                 "retryOnce",
                 "syncModels",
+                "declareHostCapabilities",
+                "declareWebsockets",
                 "_comments",
             ]
             .contains(&key.as_str())
@@ -240,6 +244,18 @@ impl Plugin for AntigravityRouter {
         }
         let retry_once = bool_field("retryOnce", false)?;
         let sync_models = bool_field("syncModels", true)?;
+        // Both default off. A stock Codey host uses `deny_unknown_fields`, so any
+        // capability field it does not recognize blocks route registration.
+        // `declareHostCapabilities` enables `modelContexts`; `declareWebsockets`
+        // additionally enables the Responses WebSocket capability flag. Remote
+        // compaction and native Web Search are never declared true.
+        let declare_host_capabilities = bool_field("declareHostCapabilities", false)?;
+        let declare_websockets = bool_field("declareWebsockets", false)?;
+        if declare_websockets && !declare_host_capabilities {
+            return Err(
+                "declareWebsockets requires declareHostCapabilities: the host must already accept the capability fields".into(),
+            );
+        }
         let base_url = config
             .get("baseUrl")
             .map(|v| v.as_str().ok_or("baseUrl must be a string"))
@@ -292,6 +308,8 @@ impl Plugin for AntigravityRouter {
             base_url,
             models,
             model_contexts: BTreeMap::new(),
+            declare_host_capabilities,
+            declare_websockets,
             route_id,
             retry_once,
             sync_models,
@@ -325,9 +343,28 @@ impl Plugin for AntigravityRouter {
                         }
                     }
                 }
-                Ok(
-                    json!({"name":"Antigravity","baseUrl":self.base_url,"upstreamProtocol":"openaiResponses","models":self.models,"modelContexts":self.model_contexts,"supportsWebsockets":true,"supportsRemoteCompaction":false,"supportsNativeWebSearch":false,"headers":[{"name":MARKER,"value":"codey-antigravity"}]}),
-                )
+                // Stock Codey cannot read these fields and rejects the whole
+                // descriptor, so nothing is advertised unless the user opts in.
+                // Remote compaction and native Web Search are never declared.
+                let mut route = json!({
+                    "name": "Antigravity",
+                    "baseUrl": self.base_url,
+                    "upstreamProtocol": "openaiResponses",
+                    "models": self.models,
+                    "headers": [{"name": MARKER, "value": "codey-antigravity"}],
+                });
+                if self.declare_host_capabilities {
+                    let object = route.as_object_mut().expect("route object");
+                    object.insert(
+                        "modelContexts".into(),
+                        codey_plugin_sdk::serde_json::to_value(&self.model_contexts)
+                            .map_err(|error| error.to_string())?,
+                    );
+                    object.insert("supportsRemoteCompaction".into(), json!(false));
+                    object.insert("supportsNativeWebSearch".into(), json!(false));
+                    object.insert("supportsWebsockets".into(), json!(self.declare_websockets));
+                }
+                Ok(route)
             }
             "request.beforeSend" => {
                 if ours {
@@ -352,7 +389,7 @@ impl Plugin for AntigravityRouter {
             }
             "request.completed" | "request.failed" | "request.cancelled" => Ok(json!({})),
             "ping" => Ok(
-                json!({"plugin":"antigravity-router","version":"0.9.0","lifecycleEnabled":self.lifecycle_enabled,"syncModels":self.sync_models,"catalogSource":self.catalog_source}),
+                json!({"plugin":"antigravity-router","version":"0.9.0","lifecycleEnabled":self.lifecycle_enabled,"syncModels":self.sync_models,"declareHostCapabilities":self.declare_host_capabilities,"declareWebsockets":self.declare_websockets,"catalogSource":self.catalog_source}),
             ),
             _ => Err(format!("unknown method: {method}")),
         }
@@ -376,14 +413,23 @@ mod tests {
     }
 
     #[test]
-    fn default_route_does_not_intercept_lifecycle_requests() {
+    fn stock_route_omits_capability_fields_and_does_not_intercept_lifecycle_requests() {
         let (mut router, _dir) = router(json!({"syncModels":false}));
         let route = router.invoke("provider.describe", json!({})).unwrap();
         assert_eq!(route["upstreamProtocol"], "openaiResponses");
-        assert_eq!(route["supportsWebsockets"], true);
-        assert_eq!(route["supportsRemoteCompaction"], false);
-        assert_eq!(route["supportsNativeWebSearch"], false);
-        // Exercise the SDK contract, including newly introduced capability fields.
+        // Stock Codey rejects unknown descriptor fields, so the default output
+        // must stay within the released schema.
+        for field in [
+            "supportsWebsockets",
+            "supportsRemoteCompaction",
+            "supportsNativeWebSearch",
+            "modelContexts",
+        ] {
+            assert!(
+                route.get(field).is_none(),
+                "{field} must not be default-visible"
+            );
+        }
         let _: codey_plugin_sdk::provider::RouteDescriptor =
             codey_plugin_sdk::serde_json::from_value(route.clone()).unwrap();
         assert_eq!(route["headers"][0]["name"], MARKER);
@@ -398,6 +444,51 @@ mod tests {
             json!({"action":"continue"})
         );
         assert!(router.invoke("unknown.method", json!({})).is_err());
+    }
+
+    #[test]
+    fn opting_into_host_capabilities_advertises_only_contexts_and_no_native_claims() {
+        let (mut router, _dir) = router(json!({"syncModels":false,"declareHostCapabilities":true}));
+        let route = router.invoke("provider.describe", json!({})).unwrap();
+        assert!(route["modelContexts"].is_object());
+        // Remote compaction, native search and WebSocket stay off by default.
+        assert_eq!(route["supportsRemoteCompaction"], false);
+        assert_eq!(route["supportsNativeWebSearch"], false);
+        assert_eq!(route["supportsWebsockets"], false);
+        let _: codey_plugin_sdk::provider::RouteDescriptor =
+            codey_plugin_sdk::serde_json::from_value(route).unwrap();
+        assert_eq!(
+            router.invoke("ping", json!({})).unwrap()["declareHostCapabilities"],
+            true
+        );
+    }
+
+    #[test]
+    fn websockets_require_an_explicit_opt_in_with_host_capabilities() {
+        let (mut router, _dir) = router(
+            json!({"syncModels":false,"declareHostCapabilities":true,"declareWebsockets":true}),
+        );
+        let route = router.invoke("provider.describe", json!({})).unwrap();
+        assert_eq!(route["supportsWebsockets"], true);
+        assert_eq!(
+            router.invoke("ping", json!({})).unwrap()["declareWebsockets"],
+            true
+        );
+        // Enabling WebSocket transport without the descriptor contract is rejected.
+        let dir = tempfile::tempdir().unwrap();
+        let context = PluginContext {
+            plugin_id: "dev.codey.antigravity-router".into(),
+            plugin_dir: dir.path().into(),
+            data_dir: dir.path().into(),
+            log_dir: dir.path().into(),
+        };
+        let error = AntigravityRouter::create(
+            json!({"syncModels":false,"declareWebsockets":true}),
+            context,
+        )
+        .err()
+        .expect("WebSocket declaration requires a compatible host");
+        assert!(error.contains("declareHostCapabilities"), "{error}");
     }
 
     #[test]
@@ -473,7 +564,7 @@ mod tests {
             {"id":"gemini-known","context_window":524288,"contextWindow":524288,"max_output_tokens":12345},
             {"id":"unknown","max_output_tokens":8192}
         ]}));
-        let (mut router, _dir) = router(json!({"baseUrl":base}));
+        let (mut router, _dir) = router(json!({"baseUrl":base,"declareHostCapabilities":true}));
         let route = router.invoke("provider.describe", json!({})).unwrap();
         task.join().unwrap();
         let context = &route["modelContexts"]["gemini-known"];

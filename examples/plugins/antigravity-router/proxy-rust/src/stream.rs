@@ -69,6 +69,7 @@ pub async fn pump_stream(
     let mut completed = false;
     let mut finish_reason: Option<String> = None;
     let mut usage = zero_usage();
+    let mut stray = String::new();
     let mut emitted_searches: std::collections::HashSet<String> = std::collections::HashSet::new();
     let stall = std::time::Duration::from_millis(opts.stall_timeout_ms.max(1));
 
@@ -90,14 +91,16 @@ pub async fn pump_stream(
                     error = Some(format!("stream stalled: no data for {}ms", opts.stall_timeout_ms));
                     break;
                 }
-                Ok(None) => break,
+                Ok(None) => None,
                 Ok(Some(Err(e))) => {
                     error = Some(crate::security::safe_error(e));
                     break;
                 }
-                Ok(Some(Ok(bytes))) => bytes,
+                Ok(Some(Ok(bytes))) => Some(bytes),
             }
         };
+        let ended = next.is_none();
+        let next = next.unwrap_or_default();
         received = received.saturating_add(next.len());
         if received > 64 * 1024 * 1024 || buffer.len().saturating_add(next.len()) > 8 * 1024 * 1024
         {
@@ -106,6 +109,10 @@ pub async fn pump_stream(
         }
         // Decode complete lines, preserving UTF-8 scalars split across network chunks.
         buffer.extend_from_slice(&next);
+        // The final SSE/JSON line need not have a newline. Parse it once at EOF.
+        if ended && !buffer.is_empty() {
+            buffer.push(b'\n');
+        }
         while let Some(idx) = buffer.iter().position(|&b| b == b'\n') {
             let bytes: Vec<u8> = buffer.drain(..=idx).collect();
             let Ok(line) = std::str::from_utf8(&bytes) else {
@@ -114,6 +121,31 @@ pub async fn pump_stream(
             };
             let line = line.trim_end_matches(['\r', '\n']);
             let Some(json_line) = line.strip_prefix("data:") else {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.starts_with(':') {
+                    continue;
+                }
+                // v0.10: some 200 responses carry a bare, possibly multiline JSON error.
+                if stray.is_empty() {
+                    if let Some(start) = trimmed.find('{') {
+                        stray.push_str(&trimmed[start..]);
+                    }
+                } else {
+                    if stray.len().saturating_add(trimmed.len()).saturating_add(1) > 8 * 1024 * 1024
+                    {
+                        error = Some("upstream stream exceeds size limit".into());
+                        break;
+                    }
+                    stray.push('\n');
+                    stray.push_str(trimmed);
+                }
+                if let Ok(chunk) = serde_json::from_str::<Value>(&stray) {
+                    if let Some(err) = upstream_error(&chunk) {
+                        error = Some(err);
+                        break;
+                    }
+                    stray.clear();
+                }
                 continue;
             };
             let json_line = json_line.trim();
@@ -124,18 +156,8 @@ pub async fn pump_stream(
                 error = Some("invalid JSON in upstream stream".into());
                 break;
             };
-            if chunk.get("error").is_some() && chunk["error"].is_object()
-                || chunk
-                    .get("error")
-                    .map(|e| e.is_object() || e.is_string())
-                    .unwrap_or(false)
-            {
-                let msg = chunk
-                    .pointer("/error/message")
-                    .and_then(|m| m.as_str())
-                    .map(String::from)
-                    .unwrap_or_else(|| chunk["error"].to_string());
-                error = Some(msg);
+            if let Some(err) = upstream_error(&chunk) {
+                error = Some(err);
                 break;
             }
             let data = if chunk.get("response").is_some() && chunk["response"].is_object() {
@@ -275,13 +297,16 @@ pub async fn pump_stream(
             }
         }
         writer.flush(sink);
-        if error.is_some() {
+        if error.is_some() || ended {
             break;
         }
     }
 
-    if error.is_none() && buffer.iter().any(|b| !b.is_ascii_whitespace()) {
+    if error.is_none() && (buffer.iter().any(|b| !b.is_ascii_whitespace()) || !stray.is_empty()) {
         error = Some("truncated upstream SSE record".into());
+    }
+    if error.is_none() && !completed {
+        error = Some("Antigravity stream ended without a finish reason; the response was terminated before completion.".into());
     }
     if let Some(err) = error {
         let err = crate::security::redact_secrets(&err);
@@ -299,14 +324,6 @@ pub async fn pump_stream(
     if completed && !opts.hold_complete {
         writer.complete(usage.clone(), finish_reason.clone());
         writer.flush(sink);
-    } else if !completed && has_content {
-        usage = zero_usage();
-        if opts.hold_complete {
-            writer.seal();
-        } else {
-            writer.complete(usage.clone(), None);
-        }
-        writer.flush(sink);
     }
     PumpResult {
         finish_reason,
@@ -314,6 +331,21 @@ pub async fn pump_stream(
         has_content,
         error: None,
     }
+}
+
+fn upstream_error(chunk: &Value) -> Option<String> {
+    let error = chunk
+        .get("error")
+        .filter(|e| e.is_object() || e.is_string())?;
+    let message = error
+        .get("message")
+        .and_then(Value::as_str)
+        .map(String::from)
+        .unwrap_or_else(|| error.to_string());
+    Some(match error.get("code").and_then(Value::as_i64) {
+        Some(code) => format!("{message} ({code})"),
+        None => message,
+    })
 }
 
 #[cfg(test)]
@@ -377,7 +409,7 @@ mod tests {
 
     #[tokio::test]
     async fn intercepts_web_search_calls() {
-        let payload = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":{\"name\":\"web_search\",\"args\":{\"query\":\"rust sse\"},\"id\":\"c1\"}}]}}]}\n\n";
+        let payload = "data: {\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":{\"name\":\"web_search\",\"args\":{\"query\":\"rust sse\"},\"id\":\"c1\"}}]},\"finishReason\":\"STOP\"}]}\n\n";
         let mut writer = Writer::new("r2".into(), "m".into(), 0);
         let mut out = String::new();
         let mut sink = |chunk: &str| out.push_str(chunk);
@@ -412,6 +444,10 @@ mod tests {
             ("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"中文🙂文本\"}]},\"finishReason\":\"STOP\"}]}\n\n".to_string(), false),
             ("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"partial\"}]},\"finishReason\":\"STOP\"}]}\n\ndata: {\"error\":{\"message\":\"late error\"}}\n\n".to_string(), true),
             ("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"partial\"}]} }]}\n\ndata: {\"response\": ".to_string(), true),
+            ("{\n\"error\":{\"code\":429,\"message\":\"bare error\"}\n}".to_string(), true),
+            ("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"partial\"}]},\"finishReason\":\"STOP\"}]}\n\n{\"error\":{\"message\":\"late bare error\"}}".to_string(), true),
+            ("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"partial\"}]}}]}\n\n".to_string(), true),
+            ("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"中文🙂文本\"}]},\"finishReason\":\"STOP\"}]}".to_string(), false),
         ] {
             let body = futures_util::stream::iter(payload.as_bytes().iter().map(|b| Ok(bytes::Bytes::copy_from_slice(&[*b]))).collect::<Vec<reqwest::Result<bytes::Bytes>>>());
             let mut writer = Writer::new("unicode".into(), "m".into(), 0);
@@ -444,7 +480,7 @@ mod tests {
         )
         .await;
         assert!(!res.has_content);
-        // The empty-stream failure is emitted by the orchestration layer after
-        // retries exhaust, not by the pump (so retries can reuse the writer).
+        assert!(res.error.unwrap().contains("without a finish reason"));
+        assert!(out.contains("response.failed"));
     }
 }

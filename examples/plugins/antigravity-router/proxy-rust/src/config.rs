@@ -1,8 +1,7 @@
 // Shared config: CLI args, env helpers, paths, wire constants.
 use std::path::PathBuf;
 
-pub const DEFAULT_UA: &str =
-    "antigravity/cli/1.2.4 (aidev_client; os_type=linux; arch=amd64; cl=982146307; auth_method=consumer)";
+pub const DEFAULT_UA: &str = "antigravity/cli/1.2.4 (aidev_client; os_type=linux; arch=amd64; cl=982146307; auth_method=consumer)";
 
 pub const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 pub const AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -25,13 +24,12 @@ pub const MAX_SEARCH_GROUNDS: usize = 4;
 pub const PLACEHOLDER_THOUGHT_SIGNATURE: &str = "context_engineering_is_the_way_to_go";
 pub const CONTINUATION_TEXT: &str =
     "Continue the active task using the available instructions and context.";
-pub const DEFAULT_IMAGE_MODEL: &str = "gemini-3-pro-image";
+pub const DEFAULT_IMAGE_MODEL: &str = "gemini-3.1-flash-image";
 pub const IMAGE_MODEL_FALLBACKS: [&str; 3] = [
     DEFAULT_IMAGE_MODEL,
-    "gemini-3.1-flash-image",
+    "gemini-3-pro-image",
     "gemini-3-pro-image-preview",
 ];
-pub const IMAGE_SYSTEM_INSTRUCTION: &str = "You are an AI image generator. Generate images based on user descriptions. Focus on creating high-quality, visually appealing images that match the user's request.";
 pub const MAX_PROMPT_CHARS: usize = 8000;
 
 pub fn oauth_client_credentials() -> Result<(String, String), String> {
@@ -69,11 +67,17 @@ pub fn extra_tool_enabled(tool: &str) -> bool {
     extra_tool_policy(
         ag_env("NO_EXTRA_TOOLS").as_deref(),
         ag_env(&format!("NO_{tool}_TOOL")).as_deref(),
+        tool != "SEARCH",
     )
 }
 
-fn extra_tool_policy(all: Option<&str>, specific: Option<&str>) -> bool {
-    all != Some("1") && specific != Some("1")
+fn extra_tool_policy(all: Option<&str>, specific: Option<&str>, default_enabled: bool) -> bool {
+    all != Some("1")
+        && match specific {
+            Some("1") => false,
+            Some("0") => true,
+            _ => default_enabled,
+        }
 }
 
 #[cfg(test)]
@@ -96,10 +100,12 @@ mod tests {
 
     #[test]
     fn tools_can_be_disabled_together_or_separately() {
-        assert!(super::extra_tool_policy(None, None));
-        assert!(!super::extra_tool_policy(Some("1"), None));
-        assert!(!super::extra_tool_policy(None, Some("1")));
-        assert!(super::extra_tool_policy(Some("0"), Some("0")));
+        assert!(super::extra_tool_policy(None, None, true));
+        assert!(!super::extra_tool_policy(None, None, false));
+        assert!(!super::extra_tool_policy(Some("1"), None, true));
+        assert!(!super::extra_tool_policy(None, Some("1"), true));
+        assert!(super::extra_tool_policy(Some("0"), Some("0"), false));
+        assert!(!super::extra_tool_policy(Some("1"), Some("0"), false));
     }
 }
 

@@ -12,6 +12,7 @@ Run-Checked $Cargo @('fmt','--manifest-path',$proxy,'--','--check')
 $previousFlags=$env:RUSTFLAGS
 try {
  if($Target -eq 'x86_64-pc-windows-gnu'){$env:RUSTFLAGS=($previousFlags+' -C link-arg=-static-libgcc -C link-arg=-static').Trim()}
+ if($Target -eq 'x86_64-pc-windows-msvc'){$env:RUSTFLAGS=($previousFlags+' -C target-feature=+crt-static').Trim()}
  Run-Checked $Cargo @('build','--manifest-path',$native,'-p','codey-plugin-antigravity-router','--target',$Target,'--release','--locked','--target-dir',(Join-Path $repo 'target'))
  Run-Checked $Cargo @('build','--manifest-path',$proxy,'--target',$Target,'--release','--locked','--target-dir',(Join-Path $example 'proxy-rust/target'))
  Run-Checked $Python @((Join-Path $PSScriptRoot 'package-release.py'),$example,$OutputDir,'--cargo',$Cargo,'--target',$Target)

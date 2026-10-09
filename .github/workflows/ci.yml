@@ -30,11 +30,65 @@ jobs:
       - name: Check proxy formatting
         run: cargo fmt --manifest-path examples/plugins/antigravity-router/proxy-rust/Cargo.toml -- --check
       - name: Test proxy with locked dependencies
+        env:
+          ANTIGRAVITY_NO_SEARCH_TOOL: '0'
         run: cargo test --manifest-path examples/plugins/antigravity-router/proxy-rust/Cargo.toml --locked
       - name: Build proxy for mock E2E
         run: cargo build --manifest-path examples/plugins/antigravity-router/proxy-rust/Cargo.toml --release --locked
       - name: Mock Responses, OAuth rotation, search and image E2E
         run: node examples/plugins/antigravity-router/tests/e2e-rust-proxy.test.mjs
+
+  linux-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            examples/plugins/antigravity-router/proxy-rust -> target
+      - name: Install lsof for portable runtime checks
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends lsof
+      - name: Resolve the standalone workspace lock
+        run: cargo metadata --format-version 1 > /dev/null
+      - name: Test SDK contracts
+        run: cargo test -p codey-plugin-sdk --locked
+      - name: Test native ABI and proxy mock E2E
+        env:
+          ANTIGRAVITY_NO_SEARCH_TOOL: '0'
+        run: ./examples/plugins/antigravity-router/scripts/test.sh
+      - name: Test native package validation rules
+        run: python -m unittest discover -s scripts -p test_package_plugin.py
+      - name: Build native and portable Linux packages
+        run: >-
+          ./examples/plugins/antigravity-router/scripts/build-release.sh
+          --target x86_64-unknown-linux-gnu
+          --output-dir examples/plugins/antigravity-router/dist/linux-x64
+      - name: Test precompiled release ABI, proxy and isolated installation
+        run: >-
+          python examples/plugins/antigravity-router/scripts/test-artifact.py
+          examples/plugins/antigravity-router/dist/linux-x64/codey-antigravity-0.9.0-linux-x64
+      - name: Upload plugin packages for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: antigravity-linux-x64
+          path: |
+            examples/plugins/antigravity-router/dist/linux-x64/*.codey-plugin
+            examples/plugins/antigravity-router/dist/linux-x64/*.zip
+            examples/plugins/antigravity-router/dist/linux-x64/SHA256SUMS
+          if-no-files-found: error
 
   windows-package:
     runs-on: windows-latest
@@ -62,6 +116,8 @@ jobs:
       - name: Test SDK contracts
         run: cargo test -p codey-plugin-sdk --locked
       - name: Test native ABI and proxy mock E2E
+        env:
+          ANTIGRAVITY_NO_SEARCH_TOOL: '0'
         shell: powershell
         run: ./examples/plugins/antigravity-router/scripts/test.ps1
       - name: Test native package validation rules
@@ -69,9 +125,9 @@ jobs:
       - name: Build native and portable Windows packages
         shell: powershell
         run: ./examples/plugins/antigravity-router/scripts/build-release.ps1
-      - name: Verify isolated portable installation
+      - name: Test precompiled release ABI, proxy and isolated installation
         shell: powershell
-        run: ./examples/plugins/antigravity-router/scripts/test-portable.ps1 -Bundle ./examples/plugins/antigravity-router/dist/windows-x64/codey-antigravity-0.9.0-windows-x64
+        run: python examples/plugins/antigravity-router/scripts/test-artifact.py ./examples/plugins/antigravity-router/dist/windows-x64/codey-antigravity-0.9.0-windows-x64
       - name: Upload plugin packages for review
         uses: actions/upload-artifact@v4
         with:
@@ -80,4 +136,65 @@ jobs:
             examples/plugins/antigravity-router/dist/windows-x64/*.codey-plugin
             examples/plugins/antigravity-router/dist/windows-x64/*.zip
             examples/plugins/antigravity-router/dist/windows-x64/SHA256SUMS
+          if-no-files-found: error
+
+  macos-package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            label: arm64
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            label: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            examples/plugins/antigravity-router/proxy-rust -> target
+      - name: Resolve the standalone workspace lock
+        run: cargo metadata --format-version 1 > /dev/null
+      - name: Test SDK contracts
+        run: cargo test -p codey-plugin-sdk --locked
+      - name: Test native ABI and proxy mock E2E
+        env:
+          ANTIGRAVITY_NO_SEARCH_TOOL: '0'
+        run: ./examples/plugins/antigravity-router/scripts/test.sh
+      - name: Test native package validation rules
+        run: python -m unittest discover -s scripts -p test_package_plugin.py
+      - name: Build native and portable macOS packages
+        run: >-
+          ./examples/plugins/antigravity-router/scripts/build-release.sh
+          --target ${{ matrix.target }}
+          --output-dir examples/plugins/antigravity-router/dist/macos-${{ matrix.label }}
+      - name: Test precompiled release ABI, proxy and isolated installation
+        run: >-
+          python examples/plugins/antigravity-router/scripts/test-artifact.py
+          examples/plugins/antigravity-router/dist/macos-${{ matrix.label }}/codey-antigravity-0.9.0-macos-${{ matrix.label }}
+      - name: Upload plugin packages for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: antigravity-macos-${{ matrix.label }}
+          path: |
+            examples/plugins/antigravity-router/dist/macos-${{ matrix.label }}/*.codey-plugin
+            examples/plugins/antigravity-router/dist/macos-${{ matrix.label }}/*.zip
+            examples/plugins/antigravity-router/dist/macos-${{ matrix.label }}/SHA256SUMS
           if-no-files-found: error

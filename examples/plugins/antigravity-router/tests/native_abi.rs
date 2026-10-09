@@ -92,9 +92,19 @@ fn abi_route_scoping_and_destroy() {
     assert_eq!(route["baseUrl"], "http://127.0.0.1:8787/v1");
     assert!(route["models"].as_array().unwrap().len() <= 32);
     assert!(route.get("transport").is_none());
-    assert_eq!(route["supportsWebsockets"], true);
-    assert_eq!(route["supportsRemoteCompaction"], false);
-    assert_eq!(route["supportsNativeWebSearch"], false);
+    // Default output must fit the released descriptor schema exactly; a stock
+    // Codey rejects unknown fields and would refuse to register the route.
+    for field in [
+        "supportsWebsockets",
+        "supportsRemoteCompaction",
+        "supportsNativeWebSearch",
+        "modelContexts",
+    ] {
+        assert!(
+            route.get(field).is_none(),
+            "{field} must not be default-visible"
+        );
+    }
     let _: codey_plugin_sdk::provider::RouteDescriptor = serde_json::from_value(route).unwrap();
     assert_eq!(
         invoke(&mut n, "request.afterHeaders", event("other", 0)),
@@ -192,7 +202,12 @@ fn abi_syncs_only_cached_loopback_catalog() {
         )
         .unwrap();
     });
-    let mut n = create(&library_path(), json!({"baseUrl":base})).unwrap();
+    // Context budgets are only advertised when the user opts into the capability contract.
+    let mut n = create(
+        &library_path(),
+        json!({"baseUrl":base,"declareHostCapabilities":true}),
+    )
+    .unwrap();
     let route = invoke(&mut n, "provider.describe", json!({}));
     assert_eq!(route["models"], json!(["gemini-new-upstream"]));
     assert_eq!(

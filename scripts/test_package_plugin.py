@@ -25,14 +25,14 @@ class PackageScopeTests(unittest.TestCase):
     def package(self, urls=(), capabilities=(LIFECYCLE, API_KEY)):
         self.sequence += 1
         output = self.root / f"fixture-{self.sequence}.codey-plugin"
-        command = [sys.executable, str(SCRIPT), "--library", str(self.library),
+        command = [sys.executable, "-X", "utf8", str(SCRIPT), "--library", str(self.library),
                    "--output", str(output), "--id", "dev.codey.test",
                    "--name", "Test", "--version", "0.1.0"]
         for capability in capabilities:
             command.extend(["--capability", capability])
         for url in urls:
             command.extend(["--api-key-url", url])
-        result = subprocess.run(command, capture_output=True, text=True)
+        result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
         manifest = None
         if result.returncode == 0:
             with zipfile.ZipFile(output) as archive:
