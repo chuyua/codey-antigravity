@@ -52,6 +52,7 @@ fn cached_catalog(
         Vec<String>,
         BTreeMap<String, codey_plugin_sdk::provider::ModelContext>,
         usize,
+        usize,
     ),
     &'static str,
 > {
@@ -160,15 +161,24 @@ fn cached_catalog(
     }
     let visible = select_host_models(&models, preferred_models);
     let mut contexts = BTreeMap::new();
+    let mut ignored_budgets = 0;
     for (model, entry) in models.iter().zip(data) {
         if visible.contains(model) {
-            if let Some(context) = catalog_context(entry)? {
-                contexts.insert(model.clone(), context);
+            match catalog_context(entry) {
+                Ok(Some(context)) => {
+                    contexts.insert(model.clone(), context);
+                }
+                Ok(None) => {}
+                Err(_) => {
+                    // Context budgets are OPTIONAL metadata. Never let malformed
+                    // upstream window/output limits block valid model IDs.
+                    ignored_budgets += 1;
+                }
             }
         }
     }
     let total = models.len();
-    Ok((visible, contexts, total))
+    Ok((visible, contexts, total, ignored_budgets))
 }
 
 // Preserve only configured model IDs still present in the current authenticated
@@ -344,7 +354,12 @@ impl Plugin for AntigravityRouter {
             "provider.describe" => {
                 if self.sync_models {
                     match cached_catalog(&self.base_url, &self.models) {
-                        Ok((models, contexts, available)) => {
+                        Ok((models, contexts, available, ignored_budgets)) => {
+                            if ignored_budgets > 0 {
+                                let _ = self.context.log(&format!(
+                                    "antigravity_invalid_optional_model_budgets:{ignored_budgets}"
+                                ));
+                            }
                             if available > models.len() {
                                 let _ = self.context.log(&format!(
                                     "antigravity_catalog_host_limit: showing {} of {available} authenticated models",
@@ -623,6 +638,26 @@ mod tests {
         ] {
             assert!(catalog_context(&value).is_err(), "{value}");
         }
+    }
+
+    #[test]
+    fn malformed_optional_budgets_do_not_block_authenticated_models() {
+        let (base, task) = catalog_server(json!({"data":[
+            {"id":"gemini-valid","context_window":200000,"max_output_tokens":12000},
+            {"id":"gemini-overstated","context_window":1048576,"max_output_tokens":1048576},
+            {"id":"claude-overstated","context_window":200000,"max_output_tokens":250000}
+        ]}));
+        let (mut router, _dir) = router(json!({
+            "baseUrl":base,"declareHostCapabilities":true
+        }));
+        let route = router.invoke("provider.describe", json!({})).unwrap();
+        task.join().unwrap();
+        assert_eq!(route["models"].as_array().unwrap().len(), 3);
+        assert!(route["modelContexts"].get("gemini-valid").is_some());
+        assert!(route["modelContexts"].get("gemini-overstated").is_none());
+        assert!(route["modelContexts"].get("claude-overstated").is_none());
+        let _: codey_plugin_sdk::provider::RouteDescriptor =
+            codey_plugin_sdk::serde_json::from_value(route).unwrap();
     }
 
     #[test]

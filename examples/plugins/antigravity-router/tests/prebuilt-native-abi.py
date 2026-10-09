@@ -186,6 +186,20 @@ class ReleaseAbi(unittest.TestCase):
                 self.assertEqual(descriptor['modelContexts']['gemini-special']['contextWindow'], 524288)
                 self.assertEqual(state['requests'], ['/v1/models?cached=1'])
 
+    def test_invalid_optional_output_budgets_do_not_hide_models(self):
+        entries = [
+            {'id': 'gemini-ok', 'context_window': 200000, 'max_output_tokens': 12000},
+            {'id': 'gemini-equal', 'context_window': 1048576, 'max_output_tokens': 1048576},
+            {'id': 'claude-too-large', 'context_window': 200000, 'max_output_tokens': 250000},
+        ]
+        with catalog({'data': entries}) as (base, state):
+            with native({'baseUrl': base, 'declareHostCapabilities': True}) as plugin:
+                descriptor = plugin.invoke('provider.describe')
+                self.assertEqual(descriptor['models'],
+                                 ['gemini-ok','gemini-equal','claude-too-large'])
+                self.assertEqual(set(descriptor['modelContexts']), {'gemini-ok'})
+                self.assertEqual(state['requests'], ['/v1/models?cached=1'])
+
     def test_optional_real_budgets_preserve_unknown_window(self):
         with catalog({'data': [{'id': 'known', 'context_window': 524288, 'max_output_tokens': 12345},
                                {'id': 'unknown', 'max_output_tokens': 8192}]}) as (base, _):
