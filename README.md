@@ -1,12 +1,83 @@
 # Codey Antigravity
 
+[![CI](https://github.com/chuyua/codey-antigravity/actions/workflows/ci.yml/badge.svg)](https://github.com/chuyua/codey-antigravity/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/chuyua/codey-antigravity?include_prereleases&label=release)](https://github.com/chuyua/codey-antigravity/releases) ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)
+
+**Native Antigravity provider for Codey · Local Rust OAuth bridge · Multi-platform portable releases.**
+
 为 [Codey](https://github.com/SuperGness/codey) 提供 Antigravity 原生线路插件和独立 Rust OAuth 代理。公开源码仓库为 [chuyua/codey-antigravity](https://github.com/chuyua/codey-antigravity)。**代理的实际上游是 [Rahularya01/pi-antigravity](https://github.com/Rahularya01/pi-antigravity)**，迁移基准和选择性移植记录见 [UPSTREAM.md](UPSTREAM.md)。
 
 插件负责向 Codey 声明线路、模型及能力；代理负责 Google 登录、模型发现、协议转换和多账号配额切换。代理需要单独启动，导入 `.codey-plugin` 不会自动安装或启动代理。
 
+## 为什么选择 Codey Antigravity？
+
+**Codey Antigravity** 为 [Codey](https://github.com/SuperGness/codey) 提供可导入的原生 Antigravity 线路插件，并通过本机 Rust 代理对接 Google Cloud Code Assist / Antigravity 模型。它不是 Pi 插件的直接重命名：本项目采用 Codey 线路接口，按需移植 [pi-antigravity](https://github.com/Rahularya01/pi-antigravity) 的协议行为。
+
+- **本地 OAuth 代理**：浏览器登录、自动刷新及多账号管理；Google 令牌保留在本机，而不是写进 Codey 的 OpenAI Key。
+- **模型发现与路由**：从当前已登录账号获取模型目录，按账号/项目校验，并把 Responses 请求转换给上游。
+- **工具与诊断**：支持显式搜索、图片生成、用量查询与健康检查；敏感能力默认为关闭或受控启用。
+- **多平台**：Windows x64、Linux x64、macOS Apple Silicon (arm64)；**不提供 macOS Intel 包**。
+
+[**下载 Releases**](https://github.com/chuyua/codey-antigravity/releases) · [CI 构建](https://github.com/chuyua/codey-antigravity/actions/workflows/ci.yml) · [安装说明](examples/plugins/antigravity-router/INSTALL.md) · [上游移植记录](UPSTREAM.md) · [问题反馈](https://github.com/chuyua/codey-antigravity/issues)
+
+> **非官方集成。** 与 Google、Codey 上游、pi-antigravity 作者不存在官方隶属或背书关系。OAuth 能否使用取决于账号资格、授权客户端、地区与上游政策；CI 的模拟测试并不代表真实 Google 账号或 GUI 已通过验证。
+
+## 快速开始（Windows）
+
+1. 从 [Releases](https://github.com/chuyua/codey-antigravity/releases) 下载 `codey-antigravity-0.9.0-windows-x64.zip`，校验同平台 `SHA256SUMS`，解压。
+2. 在解压目录打开 PowerShell；通过**当前会话环境变量**提供你有权使用的 Google OAuth 客户端凭据（不要把真实值提交到 GitHub）：
+
+```powershell
+$env:ANTIGRAVITY_CLIENT_ID = '<authorized-client-id>'
+$env:ANTIGRAVITY_CLIENT_SECRET = '<authorized-client-secret>'
+.\scripts\install.ps1 -Destination "$env:LOCALAPPDATA\CodeyAntigravity"
+Set-Location "$env:LOCALAPPDATA\CodeyAntigravity"
+.\bin\antigravity-proxy.exe login --manual
+.\start-proxy.ps1
+Invoke-RestMethod 'http://127.0.0.1:8787/v1/models?refresh=1'
+```
+
+3. 在 **Codey → 插件管理** 中导入 Windows 的 `antigravity-router-0.9.0-windows-x64.codey-plugin`，核对信任提示后**手动启用**。在线路列表选择 Antigravity 模型。代理默认只监听 `127.0.0.1:8787`。
+4. 插件导入不会自动启动代理，也不会自动登录。停用插件亦不会自动结束代理进程。
+
+**macOS / Linux：** 使用对应的 arm64 / x64 发行包；解压后按 [安装指南中的 POSIX 流程](examples/plugins/antigravity-router/INSTALL.md#macos--linux) 运行 `./scripts/install.sh`、`./bin/antigravity-proxy login --manual` 和 `./start-proxy.sh`。macOS 发行包未进行 Apple 签名或公证。
+
+## 常用命令和排查
+
+| 操作 | 命令或入口 |
+| --- | --- |
+| 查看账号 | `antigravity-proxy accounts list` |
+| 刷新模型目录 | `GET http://127.0.0.1:8787/v1/models?refresh=1` |
+| 查看配额 | `antigravity-proxy usage` |
+| 检查代理 | `GET http://127.0.0.1:8787/health` |
+| 显式搜索 | `POST http://127.0.0.1:8787/v1/search` |
+| 停止 Windows 代理 | `./stop-proxy.ps1` |
+
+上面 `antigravity-proxy` 命令在发行包安装目录下使用 `./bin/antigravity-proxy.exe`（Windows）或 `./bin/antigravity-proxy`（macOS / Linux）。如果模型列表为空，先检查 OAuth 客户端、账号资格和代理模型目录，**不要**用占位 API Key 代替 Google 登录。
+
+## 功能与兼容边界速览
+
+| 模块 | 当前边界 |
+| --- | --- |
+| 模型同步与多账号切换 | Rust 代理实现，已通过 mock E2E；真实账号需单独验证 |
+| Google 搜索 | 显式接口可用；模型侧/宿主原生搜索默认关闭 |
+| 图片生成 | 当前 HTTP 与 prompt/aspect-ratio 契约可用；未移植 Pi 原生 image API |
+| Responses WebSocket | 代理与宿主均需显式启用，默认关闭 |
+| 原生远程压缩 | 不支持 `/responses/compact` 加密压缩协议 |
+| 支持平台 | Windows x64、Linux x64、macOS arm64 |
+
+完整限制、宿主兼容性及本次移植范围请阅读 [HOST_COMPATIBILITY.md](docs/HOST_COMPATIBILITY.md) 和 [UPSTREAM.md](UPSTREAM.md)。
+
+## 构建与安全说明
+
+最新代码需通过 [CI](https://github.com/chuyua/codey-antigravity/actions/workflows/ci.yml) 的 Rust、SDK、ABI、mock E2E 与预编译产物隔离安装测试，才能用对应提交的 artifacts 发布。**CI 不验证真实 Google 账号、配额或 Codey UI**。发行包附对应源码、分组件许可和 SHA256 校验。
+
+许可不是统一 MIT：Rust 上游代理部分保留 MIT 署名，Codey 原生插件、SDK 与仓库工具为 AGPL-3.0-only，详见 [NOTICE.md](examples/plugins/antigravity-router/NOTICE.md) 与 [LICENSE](LICENSE)。账号令牌、OAuth 客户端密钥以及用户本机配置绝不可上传到 Issues、提交或发行包。
+
+---
+
 ## 当前状态
 
-本仓库包含模型目录同步、按账号和项目校验模型、真实窗口元数据以及可选的 Responses WebSocket 能力声明。插件默认只输出已发布 Codey 能识别的描述字段，不依赖任何宿主 PR 即可注册线路；增强字段需显式打开。发布前仍需本仓库线上 CI 通过，并在真实账号下实测；源码存在不等于已完成安装或真实 Google 验证。
+本仓库包含模型目录同步、按账号和项目校验模型、真实窗口元数据以及可选的 Responses WebSocket 能力声明。插件默认只输出已发布 Codey 能识别的描述字段，不依赖任何宿主 PR 即可注册线路；增强字段需显式打开。每次发布需通过本仓库线上 CI；真实账号、Google 服务连通及 Codey GUI 行为需另行实测，源码存在和 mock CI 通过均不等于已完成真实环境验证。
 
 | 功能 | 当前边界 |
 | --- | --- |
