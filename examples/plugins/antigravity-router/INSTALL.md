@@ -24,7 +24,7 @@ $env:ANTIGRAVITY_CLIENT_SECRET = '<authorized-oauth-client-secret>'
 
 在 Codey 的插件管理中导入 `antigravity-router-0.10.0-windows-x64.codey-plugin`，核对插件 ID 为 `codey.antigravity-router` 及来源后显式启用，并在线路列表选择 Antigravity 及所需模型。导入默认停用，原生插件不受沙箱隔离。无需给此本地线路添加真实 Google API Key；模型目录通过代理已登录的 Google 账号取得，任意字符串 Key 不能替代 Google 登录。
 
-默认 `syncModels=true`：启用前先运行代理并刷新其模型目录（`GET http://127.0.0.1:28787/v1/models?refresh=1`）。原生插件只读取代理缓存，不在宿主进程中发起 Google OAuth 请求。首次读取失败会阻止线路注册并显示错误，避免重新添加配置中的过时模型；同一运行实例随后读取失败时保留最后成功目录。原生线路清单上限为 32 个模型；目录多于 32 项时，插件先保留配置中仍然可用的模型，再按真实目录顺序补齐，并将可见数量写入插件日志。代理 `/v1/models` 保留完整真实目录，绝不回填已退役的配置模型。以后在线路设置中同步模型。只有明确维护手动目录时才设 `syncModels=false`；配置中的 `models` 此时才作为注册目录。
+默认 `syncModels=true`：启用前先运行代理并刷新其模型目录（`GET http://127.0.0.1:28787/v1/models?refresh=1`）。`models` 始终是插件向 Codey 声明的模型列表，最多 32 个；同步只验证这些模型当前账号确实可用，并同步上游提供的思考档位和窗口等元数据，不会把代理目录中的其他模型自动追加进线路。首次读取失败会阻止线路注册；同一运行实例随后读取失败时保留最后成功结果。代理 `/v1/models` 仍保留完整真实目录。只有明确不需要目录校验和能力同步时才设 `syncModels=false`。
 
 
 **Windows 代理连接检查**：首次安装先确认 `http://127.0.0.1:28787/health` 正常，再调用 `http://127.0.0.1:28787/v1/models?refresh=1` 预热，并通过 `http://127.0.0.1:28787/v1/models?cached=1` 确认模型目录可用。导入插件后检查 `baseUrl=http://127.0.0.1:28787/v1` 和 `syncModels=true`。如果启动终端退出会使代理停止，可选择手动运行或配置当前用户的后台启动方式；计划任务不是插件必需项。

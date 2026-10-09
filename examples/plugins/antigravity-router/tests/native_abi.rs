@@ -194,7 +194,13 @@ fn abi_syncs_only_cached_loopback_catalog() {
             input.push(byte[0]);
         }
         assert!(input.starts_with(b"GET /v1/models?cached=1 HTTP/1.1\r\n"));
-        let body = json!({"data":[{"id":"gemini-new-upstream","context_window":524288,"max_output_tokens":12345}]}).to_string();
+        let body = json!({"data":[{
+            "id":"gemini-new-upstream",
+            "context_window":524288,
+            "max_output_tokens":12345,
+            "reasoning_efforts":["low","high"]
+        }]})
+        .to_string();
         write!(
             stream,
             "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",
@@ -205,7 +211,11 @@ fn abi_syncs_only_cached_loopback_catalog() {
     // Context budgets are only advertised when the user opts into the capability contract.
     let mut n = create(
         &library_path(),
-        json!({"baseUrl":base,"declareHostCapabilities":true}),
+        json!({
+            "baseUrl":base,
+            "models":["gemini-new-upstream"],
+            "declareHostCapabilities":true
+        }),
     )
     .unwrap();
     let route = invoke(&mut n, "provider.describe", json!({}));
@@ -217,6 +227,10 @@ fn abi_syncs_only_cached_loopback_catalog() {
     assert_eq!(
         route["modelContexts"]["gemini-new-upstream"]["reserveOutputTokens"],
         12345
+    );
+    assert_eq!(
+        route["modelReasoningEfforts"]["gemini-new-upstream"],
+        json!(["low", "high"])
     );
     let _: codey_plugin_sdk::provider::RouteDescriptor = serde_json::from_value(route).unwrap();
     assert_eq!(

@@ -21,6 +21,7 @@ struct AntigravityRouter {
     base_url: String,
     models: Vec<String>,
     model_contexts: BTreeMap<String, codey_plugin_sdk::provider::ModelContext>,
+    model_reasoning_efforts: BTreeMap<String, Vec<String>>,
     declare_host_capabilities: bool,
     declare_websockets: bool,
     route_id: String,
@@ -51,6 +52,7 @@ fn cached_catalog(
     (
         Vec<String>,
         BTreeMap<String, codey_plugin_sdk::provider::ModelContext>,
+        BTreeMap<String, Vec<String>>,
         usize,
         usize,
     ),
@@ -154,13 +156,17 @@ fn cached_catalog(
                 .ok_or("invalid_catalog")
         })
         .collect::<Result<Vec<_>, _>>()?;
-    // Validate the complete authenticated list before selecting a subset for
-    // the Codey host's 32-model route descriptor. The proxy retains all models.
+    // Validate the complete authenticated catalog, then keep only the model IDs
+    // explicitly declared in plugin configuration. The proxy retains all models.
     if !safe_models(&models, 256) {
         return Err("invalid_model_ids");
     }
     let visible = select_host_models(&models, preferred_models);
+    if visible.is_empty() {
+        return Err("configured_models_unavailable");
+    }
     let mut contexts = BTreeMap::new();
+    let mut reasoning_efforts = BTreeMap::new();
     let mut ignored_budgets = 0;
     for (model, entry) in models.iter().zip(data) {
         if visible.contains(model) {
@@ -175,25 +181,37 @@ fn cached_catalog(
                     ignored_budgets += 1;
                 }
             }
+            if let Some(levels) = catalog_reasoning_efforts(entry) {
+                reasoning_efforts.insert(model.clone(), levels);
+            }
         }
     }
     let total = models.len();
-    Ok((visible, contexts, total, ignored_budgets))
+    Ok((visible, contexts, reasoning_efforts, total, ignored_budgets))
 }
 
-// Preserve only configured model IDs still present in the current authenticated
-// account catalog, then fill in stable upstream order up to the host limit.
-fn select_host_models(catalog: &[String], preferred: &[String]) -> Vec<String> {
-    let mut visible = Vec::new();
-    for candidate in preferred.iter().chain(catalog.iter()) {
-        if visible.len() == 32 {
-            break;
-        }
-        if catalog.contains(candidate) && !visible.contains(candidate) {
-            visible.push(candidate.clone());
+// models is the plugin declaration/allow-list. Synchronization validates that
+// each declared id still exists in the authenticated account catalog; it does
+// not append unrelated upstream models.
+fn select_host_models(catalog: &[String], configured: &[String]) -> Vec<String> {
+    configured
+        .iter()
+        .filter(|model| catalog.contains(model))
+        .cloned()
+        .collect()
+}
+
+fn catalog_reasoning_efforts(entry: &Value) -> Option<Vec<String>> {
+    const ALLOWED: &[&str] = &["low", "medium", "high", "xhigh", "max", "ultra"];
+    let levels = entry.get("reasoning_efforts")?.as_array()?;
+    let mut result = Vec::new();
+    for value in levels {
+        let level = value.as_str()?;
+        if ALLOWED.contains(&level) && !result.iter().any(|existing| existing == level) {
+            result.push(level.to_string());
         }
     }
-    visible
+    (!result.is_empty()).then_some(result)
 }
 
 fn catalog_context(
@@ -336,6 +354,7 @@ impl Plugin for AntigravityRouter {
             base_url,
             models,
             model_contexts: BTreeMap::new(),
+            model_reasoning_efforts: BTreeMap::new(),
             declare_host_capabilities,
             declare_websockets,
             route_id,
@@ -354,7 +373,7 @@ impl Plugin for AntigravityRouter {
             "provider.describe" => {
                 if self.sync_models {
                     match cached_catalog(&self.base_url, &self.models) {
-                        Ok((models, contexts, available, ignored_budgets)) => {
+                        Ok((models, contexts, reasoning_efforts, available, ignored_budgets)) => {
                             if ignored_budgets > 0 {
                                 let _ = self.context.log(&format!(
                                     "antigravity_invalid_optional_model_budgets:{ignored_budgets}"
@@ -362,12 +381,13 @@ impl Plugin for AntigravityRouter {
                             }
                             if available > models.len() {
                                 let _ = self.context.log(&format!(
-                                    "antigravity_catalog_host_limit: showing {} of {available} authenticated models",
+                                    "antigravity_catalog_filtered: showing {} configured of {available} authenticated models",
                                     models.len()
                                 ));
                             }
                             self.models = models;
                             self.model_contexts = contexts;
+                            self.model_reasoning_efforts = reasoning_efforts;
                             self.catalog_source = "proxy-cache";
                         }
                         Err(code) => {
@@ -392,6 +412,13 @@ impl Plugin for AntigravityRouter {
                     "models": self.models,
                     "headers": [{"name": MARKER, "value": "codey-antigravity"}],
                 });
+                if !self.model_reasoning_efforts.is_empty() {
+                    route.as_object_mut().expect("route object").insert(
+                        "modelReasoningEfforts".into(),
+                        codey_plugin_sdk::serde_json::to_value(&self.model_reasoning_efforts)
+                            .map_err(|error| error.to_string())?,
+                    );
+                }
                 if self.declare_host_capabilities {
                     let object = route.as_object_mut().expect("route object");
                     object.insert(
@@ -579,12 +606,22 @@ mod tests {
     }
 
     #[test]
-    fn cached_model_sync_and_last_good_fallback() {
-        let (base, task) = catalog_server(json!({"data":[{"id":"gemini-future"}]}));
-        let (mut router, _dir) = router(json!({"baseUrl":base}));
+    fn cached_model_sync_keeps_exact_declaration_and_last_good_fallback() {
+        let (base, task) = catalog_server(json!({"data":[
+            {"id":"unrelated-model","reasoning_efforts":["xhigh"]},
+            {"id":"gemini-future","reasoning_efforts":["low","high"]}
+        ]}));
+        let (mut router, _dir) = router(json!({"baseUrl":base,"models":["gemini-future"]}));
+        let route = router.invoke("provider.describe", json!({})).unwrap();
+        assert_eq!(route["models"], json!(["gemini-future"]));
         assert_eq!(
-            router.invoke("provider.describe", json!({})).unwrap()["models"],
-            json!(["gemini-future"])
+            route["modelReasoningEfforts"]["gemini-future"],
+            json!(["low", "high"])
+        );
+        assert!(
+            route["modelReasoningEfforts"]
+                .get("unrelated-model")
+                .is_none()
         );
         task.join().unwrap();
         assert_eq!(
@@ -603,7 +640,11 @@ mod tests {
             {"id":"gemini-known","context_window":524288,"contextWindow":524288,"max_output_tokens":12345},
             {"id":"unknown","max_output_tokens":8192}
         ]}));
-        let (mut router, _dir) = router(json!({"baseUrl":base,"declareHostCapabilities":true}));
+        let (mut router, _dir) = router(json!({
+            "baseUrl":base,
+            "models":["gemini-known","unknown"],
+            "declareHostCapabilities":true
+        }));
         let route = router.invoke("provider.describe", json!({})).unwrap();
         task.join().unwrap();
         let context = &route["modelContexts"]["gemini-known"];
@@ -648,7 +689,9 @@ mod tests {
             {"id":"claude-overstated","context_window":200000,"max_output_tokens":250000}
         ]}));
         let (mut router, _dir) = router(json!({
-            "baseUrl":base,"declareHostCapabilities":true
+            "baseUrl":base,
+            "models":["gemini-valid","gemini-overstated","claude-overstated"],
+            "declareHostCapabilities":true
         }));
         let route = router.invoke("provider.describe", json!({})).unwrap();
         task.join().unwrap();
@@ -679,11 +722,15 @@ mod tests {
     }
 
     #[test]
-    fn overflow_catalog_selects_32_models_preserving_live_config_priority() {
+    fn large_catalog_exposes_only_declared_live_models() {
         let mut entries: Vec<Value> = (0..35)
             .map(|i| json!({"id": format!("model-{i}")}))
             .collect();
-        entries.push(json!({"id":"gemini-important","context_window":524288}));
+        entries.push(json!({
+            "id":"gemini-important",
+            "context_window":524288,
+            "reasoning_efforts":["low","medium","high"]
+        }));
         let (base, task) = catalog_server(json!({"data":entries}));
         let (mut router, _dir) = router(json!({
             "baseUrl":base,
@@ -693,13 +740,21 @@ mod tests {
         let route = router.invoke("provider.describe", json!({})).unwrap();
         task.join().unwrap();
         let visible = route["models"].as_array().unwrap();
-        assert_eq!(visible.len(), 32);
-        assert_eq!(visible[0], "gemini-important");
-        assert_eq!(visible[1], "model-34");
-        assert_eq!(visible[2], "model-0");
+        assert_eq!(
+            visible,
+            &vec![
+                json!("gemini-important"),
+                json!("model-34"),
+                json!("model-0")
+            ]
+        );
         assert_eq!(
             route["modelContexts"]["gemini-important"]["contextWindow"],
             524288
+        );
+        assert_eq!(
+            route["modelReasoningEfforts"]["gemini-important"],
+            json!(["low", "medium", "high"])
         );
         let _: codey_plugin_sdk::provider::RouteDescriptor =
             codey_plugin_sdk::serde_json::from_value(route).unwrap();
@@ -709,10 +764,7 @@ mod tests {
     fn synchronized_models_must_remain_in_current_authenticated_catalog() {
         let models = vec!["gemini-live".into(), "claude-live".into()];
         let preferred = vec!["retired-model".into(), "claude-live".into()];
-        assert_eq!(
-            select_host_models(&models, &preferred),
-            vec!["claude-live", "gemini-live"]
-        );
+        assert_eq!(select_host_models(&models, &preferred), vec!["claude-live"]);
     }
 
     #[test]

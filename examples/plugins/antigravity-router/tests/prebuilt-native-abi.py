@@ -152,14 +152,20 @@ class ReleaseAbi(unittest.TestCase):
                 with native(config):
                     pass
 
-    def test_authenticated_cache_refresh_replaces_retired_models(self):
-        with catalog({'data': [{'id': 'upstream-old'}]}) as (base, state):
-            with native({'baseUrl': base, 'models': ['configured-retired']}) as plugin:
-                self.assertEqual(plugin.invoke('provider.describe')['models'], ['upstream-old'])
-                state['body'] = {'data': [{'id': 'upstream-new'}]}
-                self.assertEqual(plugin.invoke('provider.describe')['models'], ['upstream-new'])
+    def test_authenticated_cache_keeps_exact_declared_models_and_last_good(self):
+        with catalog({'data': [
+            {'id': 'declared', 'reasoning_efforts': ['low', 'high']},
+            {'id': 'other', 'reasoning_efforts': ['xhigh']}
+        ]}) as (base, state):
+            with native({'baseUrl': base, 'models': ['declared']}) as plugin:
+                descriptor = plugin.invoke('provider.describe')
+                self.assertEqual(descriptor['models'], ['declared'])
+                self.assertEqual(descriptor['modelReasoningEfforts']['declared'], ['low', 'high'])
+                self.assertNotIn('other', descriptor['modelReasoningEfforts'])
+                state['body'] = {'data': [{'id': 'other'}]}
+                self.assertEqual(plugin.invoke('provider.describe')['models'], ['declared'])
                 state['status'] = 503
-                self.assertEqual(plugin.invoke('provider.describe')['models'], ['upstream-new'])
+                self.assertEqual(plugin.invoke('provider.describe')['models'], ['declared'])
                 self.assertEqual(plugin.invoke('ping')['catalogSource'], 'proxy-cache')
             self.assertEqual(state['requests'], ['/v1/models?cached=1'] * 3)
 
@@ -174,16 +180,18 @@ class ReleaseAbi(unittest.TestCase):
 
     def test_auth_catalog_over_limit_keeps_pinned_models_and_never_invents(self):
         actual = [{'id': f'm{i}'} for i in range(35)]
-        actual.append({'id': 'gemini-special', 'context_window': 524288})
+        actual.append({'id': 'gemini-special', 'context_window': 524288,
+                       'reasoning_efforts': ['low', 'medium', 'high']})
         with catalog({'data': actual}) as (base, state):
             with native({'baseUrl': base, 'models': ['retired', 'gemini-special', 'm34'],
                          'declareHostCapabilities': True}) as plugin:
                 descriptor = plugin.invoke('provider.describe')
                 models = descriptor['models']
-                self.assertEqual(len(models), 32)
-                self.assertEqual(models[:2], ['gemini-special', 'm34'])
+                self.assertEqual(models, ['gemini-special', 'm34'])
                 self.assertNotIn('retired', models)
                 self.assertEqual(descriptor['modelContexts']['gemini-special']['contextWindow'], 524288)
+                self.assertEqual(descriptor['modelReasoningEfforts']['gemini-special'],
+                                 ['low', 'medium', 'high'])
                 self.assertEqual(state['requests'], ['/v1/models?cached=1'])
 
     def test_invalid_optional_output_budgets_do_not_hide_models(self):
@@ -193,7 +201,9 @@ class ReleaseAbi(unittest.TestCase):
             {'id': 'claude-too-large', 'context_window': 200000, 'max_output_tokens': 250000},
         ]
         with catalog({'data': entries}) as (base, state):
-            with native({'baseUrl': base, 'declareHostCapabilities': True}) as plugin:
+            with native({'baseUrl': base,
+                         'models': ['gemini-ok', 'gemini-equal', 'claude-too-large'],
+                         'declareHostCapabilities': True}) as plugin:
                 descriptor = plugin.invoke('provider.describe')
                 self.assertEqual(descriptor['models'],
                                  ['gemini-ok','gemini-equal','claude-too-large'])
@@ -203,7 +213,8 @@ class ReleaseAbi(unittest.TestCase):
     def test_optional_real_budgets_preserve_unknown_window(self):
         with catalog({'data': [{'id': 'known', 'context_window': 524288, 'max_output_tokens': 12345},
                                {'id': 'unknown', 'max_output_tokens': 8192}]}) as (base, _):
-            with native({'baseUrl': base, 'declareHostCapabilities': True}) as plugin:
+            with native({'baseUrl': base, 'models': ['known', 'unknown'],
+                         'declareHostCapabilities': True}) as plugin:
                 contexts = plugin.invoke('provider.describe')['modelContexts']
                 self.assertEqual(contexts['known']['contextWindow'], 524288)
                 self.assertEqual(contexts['known']['reserveOutputTokens'], 12345)
