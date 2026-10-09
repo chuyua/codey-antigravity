@@ -443,7 +443,7 @@ mod tests {
     fn router(config: Value) -> (AntigravityRouter, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
         let context = PluginContext {
-            plugin_id: "dev.codey.antigravity-router".into(),
+            plugin_id: "codey.antigravity-router".into(),
             plugin_dir: dir.path().into(),
             data_dir: dir.path().into(),
             log_dir: dir.path().into(),
@@ -516,7 +516,7 @@ mod tests {
         // Enabling WebSocket transport without the descriptor contract is rejected.
         let dir = tempfile::tempdir().unwrap();
         let context = PluginContext {
-            plugin_id: "dev.codey.antigravity-router".into(),
+            plugin_id: "codey.antigravity-router".into(),
             plugin_dir: dir.path().into(),
             data_dir: dir.path().into(),
             log_dir: dir.path().into(),

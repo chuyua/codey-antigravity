@@ -20,6 +20,9 @@ $env:ANTIGRAVITY_CLIENT_SECRET = '<authorized-oauth-client-secret>'
 
 `login --manual` 提供登录 URL；在同一个仍运行的终端粘贴登录完成后的回调 URL，不要把回调、令牌或账号文件发给别人。也可运行 `login` 使用本地回调。Google OAuth 属于代理，不使用 Codey 保存的 OpenAI 账号。
 
+
+**旧 ID 迁移**：新包采用 `codey.antigravity-router`，之前版本采用 `dev.codey.antigravity-router`。这属于新的插件身份，并非同一 ID 原地升级。Codey 按 ID 隔离配置、数据和线路；旧插件的账号配置不会自动复制给新插件。建议先备份旧插件配置和线路信息，停用旧插件后安装新包，再配置端口 `28787`、模型同步并测试线路。确认成功后按需卸载旧插件。不要直接改动插件状态文件、令牌文件或历史数据库。
+
 在 Codey 的插件管理中导入 `antigravity-router-0.10.0-windows-x64.codey-plugin`，核对来源后显式启用，并在线路列表选择 Antigravity 及所需模型。导入默认停用，原生插件不受沙箱隔离。无需给此本地线路添加真实 Google API Key；模型目录通过代理已登录的 Google 账号取得，任意字符串 Key 不能替代 Google 登录。
 
 默认 `syncModels=true`：启用前先运行代理并刷新其模型目录（`GET http://127.0.0.1:28787/v1/models?refresh=1`）。原生插件只读取代理缓存，不在宿主进程中发起 Google OAuth 请求。首次读取失败会阻止线路注册并显示错误，避免重新添加配置中的过时模型；同一运行实例随后读取失败时保留最后成功目录。原生线路清单上限为 32 个模型；目录多于 32 项时，插件先保留配置中仍然可用的模型，再按真实目录顺序补齐，并将可见数量写入插件日志。代理 `/v1/models` 保留完整真实目录，绝不回填已退役的配置模型。以后在线路设置中同步模型。只有明确维护手动目录时才设 `syncModels=false`；配置中的 `models` 此时才作为注册目录。
