@@ -54,7 +54,7 @@ def native(config):
         for name in ['data', 'logs']:
             (root / name).mkdir()
         raw = json.dumps({'config': config, 'context': {
-            'pluginId': 'dev.codey.antigravity-router', 'pluginDir': str(root),
+            'pluginId': 'codey.antigravity-router', 'pluginDir': str(root),
             'dataDir': str(root / 'data'), 'logDir': str(root / 'logs'),
         }}, ensure_ascii=False).encode('utf-8')
         data, instance, output = c.create_string_buffer(raw), c.c_void_p(), Buffer()

@@ -19,7 +19,7 @@ with zipfile.ZipFile(args.package) as archive:
     manifest = json.loads(archive.read("manifest.json"))
     config = archive.read("config.json")
     assert len(config) <= 1048576 and isinstance(json.loads(config), dict)
-    assert manifest["id"] == "dev.codey.antigravity-router" and manifest["version"] == "0.10.0"
+    assert manifest["id"] == "codey.antigravity-router" and manifest["version"] == "0.10.0"
     assert manifest["abiVersion"] == 1
     if args.platform:
         assert manifest["platform"] == args.platform, manifest["platform"]

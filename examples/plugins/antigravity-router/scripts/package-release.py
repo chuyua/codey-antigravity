@@ -76,7 +76,7 @@ if not proxy.is_file():
 subprocess.run([
     sys.executable, str(repo / 'scripts/package-plugin.py'),
     '--library', str(library), '--config', str(example / 'config.json'),
-    '--output', str(native), '--id', 'dev.codey.antigravity-router',
+    '--output', str(native), '--id', 'codey.antigravity-router',
     '--name', 'Antigravity', '--version', version,
     '--platform', spec['platform'], '--arch', spec['rust_arch'],
     '--capability', 'request.lifecycle.v1', '--capability', 'provider.route.v1',

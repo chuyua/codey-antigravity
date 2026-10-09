@@ -42,7 +42,7 @@ fn create(path: &Path, config: Value) -> Result<Native, String> {
     for sub in ["data", "logs"] {
         std::fs::create_dir(dir.path().join(sub)).unwrap();
     }
-    let input=serde_json::to_vec(&json!({"config":config,"context":{"pluginId":"dev.codey.antigravity-router","pluginDir":dir.path(),"dataDir":dir.path().join("data"),"logDir":dir.path().join("logs")}})).unwrap();
+    let input=serde_json::to_vec(&json!({"config":config,"context":{"pluginId":"codey.antigravity-router","pluginDir":dir.path(),"dataDir":dir.path().join("data"),"logDir":dir.path().join("logs")}})).unwrap();
     let mut instance = std::ptr::null_mut();
     let mut output = Buffer::default();
     let status = unsafe { (api.create)(input.as_ptr(), input.len(), &mut instance, &mut output) };
