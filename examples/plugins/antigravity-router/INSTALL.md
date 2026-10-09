@@ -1,6 +1,6 @@
 # 安装与使用
 
-从对应提交的 GitHub Actions 获取 Windows x64、Linux x64、macOS arm64 或 x64 artifact，校验 `SHA256SUMS` 后解压便携 ZIP。编译在 CI 完成。Windows 解压后执行：
+从对应提交的 GitHub Actions 获取 Windows x64、Linux x64 或 macOS arm64 artifact，校验 `SHA256SUMS` 后解压便携 ZIP。编译在 CI 完成。Windows 解压后执行：
 
 ```powershell
 .\scripts\install.ps1 -Destination "$env:LOCALAPPDATA\CodeyAntigravity"
@@ -61,4 +61,4 @@ curl -fsS 'http://127.0.0.1:8787/v1/models?refresh=1'
 ./stop-proxy.sh
 ```
 
-在代理运行期间导入对应平台 `.codey-plugin`。自定义启动参数为 `--port`、`--auth`、`--state-dir`；账号、目录预热、能力默认与升级步骤同 Windows。Apple 产物是分别构建的 arm64 和 x64 包，未做 Apple 签名或公证。
+在代理运行期间导入对应平台 `.codey-plugin`。自定义启动参数为 `--port`、`--auth`、`--state-dir`；账号、目录预热、能力默认与升级步骤同 Windows。Apple 产物仅提供 arm64 包，未做 Apple 签名或公证；不提供 macOS Intel 包。

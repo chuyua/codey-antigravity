@@ -27,6 +27,6 @@ python examples/plugins/antigravity-router/scripts/verify-native.py <安装包.c
 .\examples\plugins\antigravity-router\scripts\test-portable.ps1 -Bundle <解压目录>
 ```
 
-CI 分别构建 Windows x64、Linux x64、macOS arm64 与 x64。POSIX runner 使用 `scripts/test.sh` 与 `scripts/build-release.sh --target <Rust triple> --output-dir <新目录>`。macOS 使用原生架构 runner；Windows MSVC 发行包静态链接 CRT，GNU 发行包使用静态 MinGW runtime 参数。
+CI 分别构建 Windows x64、Linux x64 和 macOS arm64。POSIX runner 使用 `scripts/test.sh` 与 `scripts/build-release.sh --target <Rust triple> --output-dir <新目录>`。macOS 使用 arm64 runner，不提供 Intel 包；Windows MSVC 发行包静态链接 CRT，GNU 发行包使用静态 MinGW runtime 参数。
 
 下载 CI 预编译包后，运行 `python examples/plugins/antigravity-router/scripts/test-artifact.py <解压目录>`。此入口检查源包安全、便携清单及哈希、原生平台与库哈希、真实 C ABI、完整代理 mock E2E 和隔离安装。它不会运行 Cargo 或编译器，可用于本地全量回归。真实登录受 Google 网络和账号限制，mock 不验证账号资格、线上模型可用性和真实宿主 UI。

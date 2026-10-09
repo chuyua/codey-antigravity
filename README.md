@@ -15,7 +15,7 @@
 | Responses WebSocket | 宿主新建线路与代理握手均默认关闭。代理仅 `ANTIGRAVITY_ENABLE_WEBSOCKETS=1` 时启用；增强字段也需显式开启。升级已有线路需在宿主中关闭曾开启的开关。 |
 | Google 搜索 | 宿主原生搜索与代理模型侧搜索默认关闭；增强字段也声明 `false`。代理保留显式 `/v1/search`，模型侧搜索需 `ANTIGRAVITY_NO_SEARCH_TOOL=0` 才启用。 |
 | 原生远程压缩 | 宿主默认关闭；增强字段也声明 `false`。没有实现 Codey 所需的 `/responses/compact` 加密压缩契约。 |
-| 二进制分发 | 线上 CI 打包 Windows x64、macOS（arm64/x64）与 Linux x64；不声明真实账号下的安装验证已通过。 |
+| 二进制分发 | 线上 CI 打包 Windows x64、macOS arm64 与 Linux x64；不提供 macOS Intel 包。真实账号与宿主验证另行记录。 |
 
 默认路径与已发布 Codey 兼容，不依赖已关闭的宿主 PR #67。宿主窗口下发属于可选增强，限制与已有线路升级步骤见 [宿主兼容说明](docs/HOST_COMPATIBILITY.md)。
 
@@ -39,7 +39,7 @@
 | `examples/plugins/antigravity-router/proxy-rust/` | 独立 Rust 代理及其锁文件。 |
 | `crates/codey-plugin-sdk/` | 此插件使用的 SDK 源码；不包含 Codey 宿主程序。 |
 | `examples/plugins/antigravity-router/scripts/` | 安装、运行、打包与校验脚本。 |
-| `.github/workflows/ci.yml` | Linux 代理测试与 mock E2E；Windows、Linux、macOS（arm64/x64）分别执行 SDK、原生 ABI、代理 E2E、打包与隔离安装测试。 |
+| `.github/workflows/ci.yml` | Linux 代理测试与 mock E2E；Windows x64、Linux x64、macOS arm64 分别执行 SDK、原生 ABI、代理 E2E、打包与隔离安装测试。 |
 
 CI 只使用临时 mock 账号与随机端口，不需要真实 Google 凭据；因此不能证明账号资格、真实模型配额、Google 网络连通或 Codey UI 行为。构建脚本及对应源码说明见 [BUILDING.md](examples/plugins/antigravity-router/BUILDING.md)。
 
