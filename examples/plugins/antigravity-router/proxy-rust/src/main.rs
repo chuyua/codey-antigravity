@@ -148,7 +148,7 @@ async fn async_main(cmd: &str, args: &[String]) -> i32 {
         }
         other => {
             eprintln!(
-                "Unknown command: {other}\nUsage: antigravity-proxy [serve|--port 8787] | login [--callback-url URL] | accounts [switch|remove <sel>] | refresh | token | models [--all] | usage | doctor"
+                "Unknown command: {other}\nUsage: antigravity-proxy [serve|--port 28787] | login [--callback-url URL] | accounts [switch|remove <sel>] | refresh | token | models [--all] | usage | doctor"
             );
             1
         }

@@ -17,7 +17,7 @@
 - **工具与诊断**：支持显式搜索、图片生成、用量查询与健康检查；敏感能力默认为关闭或受控启用。
 - **多平台**：Windows x64、Linux x64、macOS Apple Silicon (arm64)；**不提供 macOS Intel 包**。
 
-[**下载 Releases**](https://github.com/chuyua/codey-antigravity/releases) · [CI 构建](https://github.com/chuyua/codey-antigravity/actions/workflows/ci.yml) · [安装说明](examples/plugins/antigravity-router/INSTALL.md) · [上游移植记录](UPSTREAM.md) · [问题反馈](https://github.com/chuyua/codey-antigravity/issues)
+[**下载 Releases**](https://github.com/chuyua/codey-antigravity/releases) · [CI 构建](https://github.com/chuyua/codey-antigravity/actions/workflows/ci.yml) · [安装说明](examples/plugins/antigravity-router/INSTALL.md) · [参考插件设计对比](docs/PLUGIN_REFERENCE_REVIEW.md) · [上游移植记录](UPSTREAM.md) · [问题反馈](https://github.com/chuyua/codey-antigravity/issues)
 
 > **非官方集成。** 与 Google、Codey 上游、pi-antigravity 作者不存在官方隶属或背书关系。OAuth 能否使用取决于账号资格、授权客户端、地区与上游政策；CI 的模拟测试并不代表真实 Google 账号或 GUI 已通过验证。
 
@@ -33,10 +33,10 @@ $env:ANTIGRAVITY_CLIENT_SECRET = '<authorized-client-secret>'
 Set-Location "$env:LOCALAPPDATA\CodeyAntigravity"
 .\bin\antigravity-proxy.exe login --manual
 .\start-proxy.ps1
-Invoke-RestMethod 'http://127.0.0.1:8787/v1/models?refresh=1'
+Invoke-RestMethod 'http://127.0.0.1:28787/v1/models?refresh=1'
 ```
 
-3. 在 **Codey → 插件管理** 中导入 Windows 的 `antigravity-router-0.10.0-windows-x64.codey-plugin`，核对信任提示后**手动启用**。在线路列表选择 Antigravity 模型。代理默认只监听 `127.0.0.1:8787`。
+3. 在 **Codey → 插件管理** 中导入 Windows 的 `antigravity-router-0.10.0-windows-x64.codey-plugin`，核对信任提示后**手动启用**。在线路列表选择 Antigravity 模型。代理默认只监听 `127.0.0.1:28787`。
 4. 插件导入不会自动启动代理，也不会自动登录。停用插件亦不会自动结束代理进程。
 
 **macOS / Linux：** 使用对应的 arm64 / x64 发行包；解压后按 [安装指南中的 POSIX 流程](examples/plugins/antigravity-router/INSTALL.md#macos--linux) 运行 `./scripts/install.sh`、`./bin/antigravity-proxy login --manual` 和 `./start-proxy.sh`。macOS 发行包未进行 Apple 签名或公证。
@@ -46,10 +46,10 @@ Invoke-RestMethod 'http://127.0.0.1:8787/v1/models?refresh=1'
 | 操作 | 命令或入口 |
 | --- | --- |
 | 查看账号 | `antigravity-proxy accounts list` |
-| 刷新模型目录 | `GET http://127.0.0.1:8787/v1/models?refresh=1` |
+| 刷新模型目录 | `GET http://127.0.0.1:28787/v1/models?refresh=1` |
 | 查看配额 | `antigravity-proxy usage` |
-| 检查代理 | `GET http://127.0.0.1:8787/health` |
-| 显式搜索 | `POST http://127.0.0.1:8787/v1/search` |
+| 检查代理 | `GET http://127.0.0.1:28787/health` |
+| 显式搜索 | `POST http://127.0.0.1:28787/v1/search` |
 | 停止 Windows 代理 | `./stop-proxy.ps1` |
 
 上面 `antigravity-proxy` 命令在发行包安装目录下使用 `./bin/antigravity-proxy.exe`（Windows）或 `./bin/antigravity-proxy`（macOS / Linux）。如果模型列表为空，先检查 OAuth 客户端、账号资格和代理模型目录，**不要**用占位 API Key 代替 Google 登录。
@@ -83,7 +83,7 @@ Invoke-RestMethod 'http://127.0.0.1:8787/v1/models?refresh=1'
 
 | 功能 | 当前边界 |
 | --- | --- |
-| 模型同步 | 默认读取已登录代理的真实缓存目录；首次目录不可用时拒绝线路注册，避免回填过时静态模型。 |
+| 模型同步 | 默认读取已登录代理的真实缓存目录；Codey 线路上限为 32 个模型，优先保留有效配置模型并按真实目录补齐；完整目录仍在代理 API。首次目录不可用时拒绝注册，不回填过时模型。 |
 | 窗口与输出限制 | 默认不声明 `modelContexts`，宿主沿用内置窗口；仅 `declareHostCapabilities=true` 时使用上游真实目录元数据，未知窗口不伪造默认值。 |
 | Responses WebSocket | 宿主新建线路与代理握手均默认关闭。代理仅 `ANTIGRAVITY_ENABLE_WEBSOCKETS=1` 时启用；增强字段也需显式开启。升级已有线路需在宿主中关闭曾开启的开关。 |
 | Google 搜索 | 宿主原生搜索与代理模型侧搜索默认关闭；增强字段也声明 `false`。代理保留显式 `/v1/search`，模型侧搜索需 `ANTIGRAVITY_NO_SEARCH_TOOL=0` 才启用。 |

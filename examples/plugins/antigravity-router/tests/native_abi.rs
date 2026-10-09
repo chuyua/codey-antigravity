@@ -89,7 +89,7 @@ fn abi_route_scoping_and_destroy() {
     assert_eq!(invoke(&mut n, "ping", json!({}))["version"], "0.10.0");
     let route = invoke(&mut n, "provider.describe", json!({}));
     assert_eq!(route["name"], "Antigravity");
-    assert_eq!(route["baseUrl"], "http://127.0.0.1:8787/v1");
+    assert_eq!(route["baseUrl"], "http://127.0.0.1:28787/v1");
     assert!(route["models"].as_array().unwrap().len() <= 32);
     assert!(route.get("transport").is_none());
     // Default output must fit the released descriptor schema exactly; a stock

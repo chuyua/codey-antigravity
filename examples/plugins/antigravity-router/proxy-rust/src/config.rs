@@ -149,7 +149,7 @@ pub fn serve_args(args: &[String]) -> ServeArgs {
     let port = arg_value(args, "--port")
         .and_then(|v| v.parse().ok())
         .or_else(|| ag_env("PROXY_PORT").and_then(|v| v.parse().ok()))
-        .unwrap_or(8787);
+        .unwrap_or(28787);
     let auth_path = arg_value(args, "--auth")
         .or_else(|| ag_env("AUTH_PATH"))
         .map(PathBuf::from)

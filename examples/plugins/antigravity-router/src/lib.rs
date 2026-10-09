@@ -46,10 +46,12 @@ fn safe_models(models: &[String], maximum: usize) -> bool {
 // proxy, redirects or OAuth occur inside the host process.
 fn cached_catalog(
     base_url: &str,
+    preferred_models: &[String],
 ) -> Result<
     (
         Vec<String>,
         BTreeMap<String, codey_plugin_sdk::provider::ModelContext>,
+        usize,
     ),
     &'static str,
 > {
@@ -151,21 +153,37 @@ fn cached_catalog(
                 .ok_or("invalid_catalog")
         })
         .collect::<Result<Vec<_>, _>>()?;
-    // The host accepts at most 32 models in a native RouteDescriptor. Reject
-    // overflow rather than dropping IDs or guessing which suffixes are aliases.
-    if models.len() > 32 {
-        return Err("catalog_too_many_models");
-    }
-    if !safe_models(&models, 32) {
+    // Validate the complete authenticated list before selecting a subset for
+    // the Codey host's 32-model route descriptor. The proxy retains all models.
+    if !safe_models(&models, 256) {
         return Err("invalid_model_ids");
     }
+    let visible = select_host_models(&models, preferred_models);
     let mut contexts = BTreeMap::new();
     for (model, entry) in models.iter().zip(data) {
-        if let Some(context) = catalog_context(entry)? {
-            contexts.insert(model.clone(), context);
+        if visible.contains(model) {
+            if let Some(context) = catalog_context(entry)? {
+                contexts.insert(model.clone(), context);
+            }
         }
     }
-    Ok((models, contexts))
+    let total = models.len();
+    Ok((visible, contexts, total))
+}
+
+// Preserve only configured model IDs still present in the current authenticated
+// account catalog, then fill in stable upstream order up to the host limit.
+fn select_host_models(catalog: &[String], preferred: &[String]) -> Vec<String> {
+    let mut visible = Vec::new();
+    for candidate in preferred.iter().chain(catalog.iter()) {
+        if visible.len() == 32 {
+            break;
+        }
+        if catalog.contains(candidate) && !visible.contains(candidate) {
+            visible.push(candidate.clone());
+        }
+    }
+    visible
 }
 
 fn catalog_context(
@@ -260,7 +278,7 @@ impl Plugin for AntigravityRouter {
             .get("baseUrl")
             .map(|v| v.as_str().ok_or("baseUrl must be a string"))
             .transpose()?
-            .unwrap_or("http://127.0.0.1:8787/v1")
+            .unwrap_or("http://127.0.0.1:28787/v1")
             .to_string();
         let port = base_url
             .strip_prefix("http://127.0.0.1:")
@@ -325,8 +343,14 @@ impl Plugin for AntigravityRouter {
         match method {
             "provider.describe" => {
                 if self.sync_models {
-                    match cached_catalog(&self.base_url) {
-                        Ok((models, contexts)) => {
+                    match cached_catalog(&self.base_url, &self.models) {
+                        Ok((models, contexts, available)) => {
+                            if available > models.len() {
+                                let _ = self.context.log(&format!(
+                                    "antigravity_catalog_host_limit: showing {} of {available} authenticated models",
+                                    models.len()
+                                ));
+                            }
                             self.models = models;
                             self.model_contexts = contexts;
                             self.catalog_source = "proxy-cache";
@@ -607,7 +631,6 @@ mod tests {
             json!({"data":[]}),
             json!({"data":[{"id":"bad\nheader"}]}),
             json!({"data":[{"id":"A"},{"id":"a"}]}),
-            json!({"data":(0..33).map(|i|json!({"id":format!("model-{i}")})).collect::<Vec<_>>()}),
         ] {
             let (base, task) = catalog_server(body);
             let (mut router, _dir) = router(json!({"baseUrl":base,"models":["gemini-fallback"]}));
@@ -618,6 +641,43 @@ mod tests {
             );
             task.join().unwrap();
         }
+    }
+
+    #[test]
+    fn overflow_catalog_selects_32_models_preserving_live_config_priority() {
+        let mut entries: Vec<Value> = (0..35)
+            .map(|i| json!({"id": format!("model-{i}")}))
+            .collect();
+        entries.push(json!({"id":"gemini-important","context_window":524288}));
+        let (base, task) = catalog_server(json!({"data":entries}));
+        let (mut router, _dir) = router(json!({
+            "baseUrl":base,
+            "models":["gemini-important","model-34","model-0"],
+            "declareHostCapabilities":true
+        }));
+        let route = router.invoke("provider.describe", json!({})).unwrap();
+        task.join().unwrap();
+        let visible = route["models"].as_array().unwrap();
+        assert_eq!(visible.len(), 32);
+        assert_eq!(visible[0], "gemini-important");
+        assert_eq!(visible[1], "model-34");
+        assert_eq!(visible[2], "model-0");
+        assert_eq!(
+            route["modelContexts"]["gemini-important"]["contextWindow"],
+            524288
+        );
+        let _: codey_plugin_sdk::provider::RouteDescriptor =
+            codey_plugin_sdk::serde_json::from_value(route).unwrap();
+    }
+
+    #[test]
+    fn synchronized_models_must_remain_in_current_authenticated_catalog() {
+        let models = vec!["gemini-live".into(), "claude-live".into()];
+        let preferred = vec!["retired-model".into(), "claude-live".into()];
+        assert_eq!(
+            select_host_models(&models, &preferred),
+            vec!["claude-live", "gemini-live"]
+        );
     }
 
     #[test]

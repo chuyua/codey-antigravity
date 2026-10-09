@@ -142,7 +142,7 @@ class ReleaseAbi(unittest.TestCase):
 
     def test_unsafe_configurations_are_rejected(self):
         cases = [[], {'baseUrl': 'https://evil.test/v1'}, {'baseUrl': 'http://127.0.0.1:0/v1'},
-                 {'baseUrl': 'http://127.0.0.1:08787/v1'}, {'models': []}, {'models': ['A', 'a']},
+                 {'baseUrl': 'http://127.0.0.1:028787/v1'}, {'models': []}, {'models': ['A', 'a']},
                  {'models': ['bad\nheader']}, {'models': [f'm{i}' for i in range(33)]},
                  {'retryOnce': True}, {'retryOnce': 2}, {'syncModels': 'true'}, {'secret': 'mock'},
                  {'enabled': True, 'lifecycleEnabled': False}, {'lifecycleEnabled': 'true'},

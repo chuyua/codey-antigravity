@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-port=8787
+port=28787
 auth_path="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/auth.json"
 state_dir=""
 exe_path=""

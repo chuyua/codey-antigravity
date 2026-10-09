@@ -1,4 +1,4 @@
-param([ValidateRange(1,65535)][int]$Port=8787,[string]$AuthPath=(Join-Path $env:USERPROFILE '.pi/agent/auth.json'),[string]$StateDir=(Join-Path $PSScriptRoot '.runtime'),[string]$ExePath='', [switch]$UseSystemProxy)
+param([ValidateRange(1,65535)][int]$Port=28787,[string]$AuthPath=(Join-Path $env:USERPROFILE '.pi/agent/auth.json'),[string]$StateDir=(Join-Path $PSScriptRoot '.runtime'),[string]$ExePath='', [switch]$UseSystemProxy)
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'scripts/runtime.ps1')
 if (!$ExePath) { $ExePath=Join-Path $PSScriptRoot 'bin/antigravity-proxy.exe'; if (!(Test-Path -LiteralPath $ExePath)) {$ExePath=Join-Path $PSScriptRoot 'proxy-rust/target/release/antigravity-proxy.exe'} }
