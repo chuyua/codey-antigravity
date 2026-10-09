@@ -239,6 +239,15 @@ mod route_guard_tests {
             .any(|m| m["id"] == "gemini-image-only" || m["id"] == "gemini-3.7-flash"));
     }
     #[test]
+    fn impossible_output_limit_is_not_exported_as_prompt_reservation() {
+        assert!(!super::valid_output_budget(1_048_576, 1_048_576));
+        assert!(!super::valid_output_budget(200_000, 250_000));
+        assert!(!super::valid_output_budget(200_000, 199_999));
+        assert!(super::valid_output_budget(200_000, 12_000));
+        assert!(super::valid_output_budget(0, 12_000));
+    }
+
+    #[test]
     fn rejects_rebinding_hosts_and_wrong_port() {
         for host in [
             "evil.test:28787",
@@ -798,6 +807,20 @@ async fn handle_models(
     ))
 }
 
+// Google metadata sometimes reports the entire context window as maxTokens.
+// This is not a usable output reservation. Omit it rather than claiming a
+// zero/negative effective prompt budget in the native Codey route.
+fn valid_output_budget(window: i64, output: i64) -> bool {
+    if output <= 0 {
+        return false;
+    }
+    if window <= 0 {
+        return true;
+    }
+    let minimum_headroom = window / 100 + i64::from(window % 100 != 0);
+    output < window && window.saturating_sub(output) >= minimum_headroom
+}
+
 fn model_directory_data(grouped: &crate::catalog::Catalog, raw: &Value) -> Vec<Value> {
     let mut data = Vec::new();
     for model in &grouped.models {
@@ -806,7 +829,7 @@ fn model_directory_data(grouped: &crate::catalog::Catalog, raw: &Value) -> Vec<V
             entry["context_window"] = json!(model.context_window);
             entry["contextWindow"] = json!(model.context_window);
         }
-        if model.max_tokens > 0 {
+        if valid_output_budget(model.context_window, model.max_tokens) {
             entry["max_output_tokens"] = json!(model.max_tokens);
         }
         data.push(entry);
@@ -853,7 +876,9 @@ fn model_directory_data(grouped: &crate::catalog::Catalog, raw: &Value) -> Vec<V
             )
             .or_else(|| public.map(|m| m.max_tokens).filter(|v| *v > 0))
             {
-                entry["max_output_tokens"] = json!(max);
+                if valid_output_budget(context.unwrap_or(0), max) {
+                    entry["max_output_tokens"] = json!(max);
+                }
             }
             data.push(entry);
         }
