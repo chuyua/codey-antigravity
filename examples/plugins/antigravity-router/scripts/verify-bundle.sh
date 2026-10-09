@@ -36,5 +36,5 @@ for path in root.rglob("*"):
 PY
 
 version="$("$root/bin/antigravity-proxy" --version)"
-[ "$version" = "antigravity-proxy 0.9.0" ] || { echo "Unexpected executable version: $version" >&2; exit 1; }
+[ "$version" = "antigravity-proxy 0.10.0" ] || { echo "Unexpected executable version: $version" >&2; exit 1; }
 echo "Portable bundle exact file list, SHA256 and executable version verified"

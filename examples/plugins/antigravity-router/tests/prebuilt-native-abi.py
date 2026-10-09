@@ -186,7 +186,7 @@ class ReleaseAbi(unittest.TestCase):
         for _ in range(50):
             with native({'syncModels': False}) as plugin:
                 for _ in range(5):
-                    self.assertEqual(plugin.invoke('ping')['version'], '0.9.0')
+                    self.assertEqual(plugin.invoke('ping')['version'], '0.10.0')
 
 
 if __name__ == '__main__':

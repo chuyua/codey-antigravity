@@ -18,7 +18,7 @@ parser.add_argument('--target', required=True)
 args = parser.parse_args()
 example = args.example.resolve()
 repo = example.parents[2]
-version = '0.9.0'
+version = '0.10.0'
 
 
 def describe_target(target: str) -> dict:

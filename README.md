@@ -23,7 +23,7 @@
 
 ## 快速开始（Windows）
 
-1. 从 [Releases](https://github.com/chuyua/codey-antigravity/releases) 下载 `codey-antigravity-0.9.0-windows-x64.zip`，校验同平台 `SHA256SUMS`，解压。
+1. 从 [Releases](https://github.com/chuyua/codey-antigravity/releases) 下载 `codey-antigravity-0.10.0-windows-x64.zip`，校验同平台 `SHA256SUMS`，解压。
 2. 在解压目录打开 PowerShell；通过**当前会话环境变量**提供你有权使用的 Google OAuth 客户端凭据（不要把真实值提交到 GitHub）：
 
 ```powershell
@@ -36,7 +36,7 @@ Set-Location "$env:LOCALAPPDATA\CodeyAntigravity"
 Invoke-RestMethod 'http://127.0.0.1:8787/v1/models?refresh=1'
 ```
 
-3. 在 **Codey → 插件管理** 中导入 Windows 的 `antigravity-router-0.9.0-windows-x64.codey-plugin`，核对信任提示后**手动启用**。在线路列表选择 Antigravity 模型。代理默认只监听 `127.0.0.1:8787`。
+3. 在 **Codey → 插件管理** 中导入 Windows 的 `antigravity-router-0.10.0-windows-x64.codey-plugin`，核对信任提示后**手动启用**。在线路列表选择 Antigravity 模型。代理默认只监听 `127.0.0.1:8787`。
 4. 插件导入不会自动启动代理，也不会自动登录。停用插件亦不会自动结束代理进程。
 
 **macOS / Linux：** 使用对应的 arm64 / x64 发行包；解压后按 [安装指南中的 POSIX 流程](examples/plugins/antigravity-router/INSTALL.md#macos--linux) 运行 `./scripts/install.sh`、`./bin/antigravity-proxy login --manual` 和 `./start-proxy.sh`。macOS 发行包未进行 Apple 签名或公证。
@@ -77,6 +77,8 @@ Invoke-RestMethod 'http://127.0.0.1:8787/v1/models?refresh=1'
 
 ## 当前状态
 
+当前下游代码版本为 **0.10.0**，以 [pi-antigravity v0.10.0](https://github.com/Rahularya01/pi-antigravity/releases/tag/v0.10.0) 作为选择性协议适配基准。版本对齐**不等于 Pi 全部专用能力移植**；详细差异及尚未实现项见 [UPSTREAM.md](UPSTREAM.md#0100-下游版本与完整性边界)。
+
 本仓库包含模型目录同步、按账号和项目校验模型、真实窗口元数据以及可选的 Responses WebSocket 能力声明。插件默认只输出已发布 Codey 能识别的描述字段，不依赖任何宿主 PR 即可注册线路；增强字段需显式打开。每次发布需通过本仓库线上 CI；真实账号、Google 服务连通及 Codey GUI 行为需另行实测，源码存在和 mock CI 通过均不等于已完成真实环境验证。
 
 | 功能 | 当前边界 |
@@ -96,8 +98,8 @@ Invoke-RestMethod 'http://127.0.0.1:8787/v1/models?refresh=1'
 
 各平台 artifact 包含：
 
-- `antigravity-router-0.9.0-<platform>-<arch>.codey-plugin`：Codey 原生插件包。
-- `codey-antigravity-0.9.0-<platform>-<arch>.zip`：代理、原生包、安装脚本、许可、对应源码及校验和。
+- `antigravity-router-0.10.0-<platform>-<arch>.codey-plugin`：Codey 原生插件包。
+- `codey-antigravity-0.10.0-<platform>-<arch>.zip`：代理、原生包、安装脚本、许可、对应源码及校验和。
 - `SHA256SUMS`：完整性校验，不替代对发布者的信任判断。
 
 解压便携 ZIP 后按 [INSTALL.md](examples/plugins/antigravity-router/INSTALL.md) 配置授权的 OAuth 客户端、登录、启动代理，再在 Codey 中导入并启用原生插件。初次启用前刷新代理模型目录。线路不需要真实 Google API Key；任意字符串 Key 不能替代 Google 登录。

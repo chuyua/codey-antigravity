@@ -26,7 +26,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 exe_path="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$exe_path")"
 auth_path="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$auth_path")"
 version="$("$exe_path" --version)"
-[ "$version" = "antigravity-proxy 0.9.0" ] || { echo "Unexpected proxy version: $version" >&2; exit 1; }
+[ "$version" = "antigravity-proxy 0.10.0" ] || { echo "Unexpected proxy version: $version" >&2; exit 1; }
 mkdir -p "$state_dir"
 state_dir="$(cd "$state_dir" && pwd)"
 record="$state_dir/proxy.json"

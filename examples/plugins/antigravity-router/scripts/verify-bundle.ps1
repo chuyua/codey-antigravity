@@ -23,6 +23,6 @@ foreach($file in $files) {
   if($relative -ne 'SHA256SUMS' -and !$listed.ContainsKey($relative)){throw "Unlisted bundle file: $relative"}
  }
 }
-if ((& (Join-Path $root 'bin/antigravity-proxy.exe') --version) -ne 'antigravity-proxy 0.9.0'){throw 'Unexpected executable version'}
+if ((& (Join-Path $root 'bin/antigravity-proxy.exe') --version) -ne 'antigravity-proxy 0.10.0'){throw 'Unexpected executable version'}
 if($LASTEXITCODE -ne 0){throw 'Proxy version check failed'}
 Write-Output 'Portable bundle exact file list, SHA256 and executable version verified'
