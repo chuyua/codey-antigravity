@@ -36,10 +36,9 @@ Set-Location "$env:LOCALAPPDATA\CodeyAntigravity"
 Invoke-RestMethod 'http://127.0.0.1:28787/v1/models?refresh=1'
 ```
 
-3. 在 **Codey → 插件管理** 中导入 Windows 的 `antigravity-router-0.10.0-windows-x64.codey-plugin`，核对信任提示后**手动启用**。在线路列表选择 Antigravity 模型。代理默认只监听 `127.0.0.1:28787`。
+3. 在 **Codey → 插件管理** 中导入 Windows 的 `antigravity-router-0.10.0-windows-x64.codey-plugin`，核对插件 ID 为 `codey.antigravity-router` 及信任提示后**手动启用**。在线路列表选择 Antigravity 模型。代理默认只监听 `127.0.0.1:28787`。
 4. 插件导入不会自动启动代理，也不会自动登录。停用插件亦不会自动结束代理进程。
 
-**插件 ID 更名提示**：新包 ID 为 `codey.antigravity-router`，旧包为 `dev.codey.antigravity-router`。Codey 将它们视为两个独立插件，不会自动迁移旧 ID 的配置、数据、日志、启用状态与线路。请先备份旧配置并停用旧插件，再安装新包、检查高位端口及模型同步。新插件正常后自行决定是否卸载旧版；不得手工篡改插件管理状态文件或删除 Google OAuth 凭据。新 ID 不表示 Codey 官方背书。
 
 **macOS / Linux：** 使用对应的 arm64 / x64 发行包；解压后按 [安装指南中的 POSIX 流程](examples/plugins/antigravity-router/INSTALL.md#macos--linux) 运行 `./scripts/install.sh`、`./bin/antigravity-proxy login --manual` 和 `./start-proxy.sh`。macOS 发行包未进行 Apple 签名或公证。
 
