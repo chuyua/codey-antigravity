@@ -84,7 +84,7 @@ Invoke-RestMethod 'http://127.0.0.1:28787/v1/models?refresh=1'
 
 | 功能 | 当前边界 |
 | --- | --- |
-| 模型同步 | 默认读取已登录代理的真实缓存目录；Codey 线路上限为 32 个模型，优先保留有效配置模型并按真实目录补齐；完整目录仍在代理 API。首次目录不可用时拒绝注册，不回填过时模型。 |
+| 模型同步 | `models` 是线路的严格声明列表；默认从已登录代理缓存验证这些模型仍可用，并同步每个模型的思考档位等能力，不自动追加目录中的其他模型。代理 API 仍保留完整目录。 |
 | 窗口与输出限制 | 默认不声明 `modelContexts`，宿主沿用内置窗口；仅 `declareHostCapabilities=true` 时使用上游真实目录元数据，未知窗口不伪造默认值。 |
 | Responses WebSocket | 宿主新建线路与代理握手均默认关闭。代理仅 `ANTIGRAVITY_ENABLE_WEBSOCKETS=1` 时启用；增强字段也需显式开启。升级已有线路需在宿主中关闭曾开启的开关。 |
 | Google 搜索 | 宿主原生搜索与代理模型侧搜索默认关闭；增强字段也声明 `false`。代理保留显式 `/v1/search`，模型侧搜索需 `ANTIGRAVITY_NO_SEARCH_TOOL=0` 才启用。 |

@@ -2,8 +2,8 @@
   "_comments": {
     "lifecycleEnabled": "插件生命周期管理｜建议开启（true）。处理 Codey 发出的插件生命周期事件；Rust 代理仍需独立运行。",
     "baseUrl": "本地代理地址｜默认 http://127.0.0.1:28787/v1，仅连接本机 127.0.0.1。修改后重新启用插件。",
-    "models": "优先使用的模型｜自动同步开启时，优先保留这里列出且账号真实可用的模型，再从代理目录补足，最多向 Codey 显示 32 个。",
-    "syncModels": "自动同步模型｜建议开启（true）。从已登录代理的缓存读取模型；首次启用前先访问 /v1/models?refresh=1 预热。关闭后需手动维护 models。",
+    "models": "插件声明模型｜Codey 只显示这里列出且当前账号真实可用的模型；自动同步不会追加其他目录模型。最多可声明 32 个。",
+    "syncModels": "同步模型能力｜建议开启（true）。从已登录代理缓存验证 models 中声明的模型，并同步思考档位等能力；不会自动增加模型。首次启用前先访问 /v1/models?refresh=1 预热。关闭后仅使用手工声明。",
     "declareHostCapabilities": "扩展能力声明｜建议关闭（false）。只有 Codey 版本兼容 modelContexts 等额外字段时才开启，否则可能导致线路注册失败。",
     "declareWebsockets": "WebSocket 能力声明｜建议关闭（false）。仅 Codey 主程序支持该能力且 declareHostCapabilities=true 时才开启。",
     "routeId": "指定线路 ID｜通常留空。仅需绑定特定 Codey provider ID 进行生命周期管理时填写；留空不影响线路注册。",

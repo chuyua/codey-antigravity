@@ -11,7 +11,7 @@ Reference supplied as `codey-Antigravity.zip`. Contains a v0.1.0 Windows/macOS c
 | Lifecycle | Native plug-in starts an in-process loopback HTTP bridge and stops it with host lifetime | Separate Rust proxy; plugin only describes a Codey route | Keep isolated proxy boundary; document persistent service management to avoid background process dying when terminal closes |
 | Credentials | Google refresh token(s) pasted into Codey route key; Base64 multi-account bundle is explicitly not encryption | OAuth tokens saved to a local Pi agent account file and consumed by the Rust proxy, not Codey's API-key field | Retain current isolation and do not copy the reference's embedded desktop OAuth client credentials |
 | Config | Single JSON with port, projectId, 8 models, maxConcurrentRequests and requestTimeoutSeconds | JSON route config plus proxy CLI / environment | Set high-port default 28787 consistently; avoid adding unsupported config fields merely to mirror the sample |
-| Model catalog | Explicit 8 model list (1 to 32 allowed), manual updates | Authenticated, cached dynamic catalog from Google | Keep authentic discovery; deterministically register up to 32 Codey models, prioritizing valid configured IDs; full catalog stays accessible from proxy API |
+| Model catalog | Explicit 8 model list (1 to 32 allowed), manual updates | Authenticated, cached dynamic catalog from Google | Keep authentic discovery for validation and metadata, while exposing only explicitly configured live model IDs; full catalog stays accessible from proxy API |
 | Bounded resources | Documented max 16 concurrent requests, timeout and signature-cache eviction | Rust resource/time limits implemented independently | Preserve limits; no claims of matching their exact internal behavior without source |
 | Auxiliary tools | Standard-library Python login, models, usage, search, image and edit CLI | Native proxy CLI and HTTP endpoints | Keep built-in Rust CLI; improve instructions, do not add an unnecessary Python dependency |
 | Network | Fixed HTTPS upstream endpoints, no redirects, loopback proxy | Loopback bind plus upstream address / token redaction checks | Preserve URL restrictions and no credential forwarding to arbitrary hosts |
@@ -32,7 +32,7 @@ Reference supplied as `codey-Antigravity.zip`. Contains a v0.1.0 Windows/macOS c
 }
 ```
 
-Start and authenticate the Rust proxy on this loopback port, then refresh `GET /v1/models?refresh=1` and confirm `GET /v1/models?cached=1` succeeds *before* enabling the native plug-in. Do not disable `syncModels` to mask a broken proxy or an OAuth failure. When the real catalog has more than 32 entries, only 32 can be shown in the native Codey route descriptor; all remain accessible through the proxy API. The chosen 32 are stable while their IDs remain available in the authenticated account catalog. If the account changes and an ID disappears, it is not retained as a phantom model.
+Start and authenticate the Rust proxy on this loopback port, then refresh `GET /v1/models?refresh=1` and confirm `GET /v1/models?cached=1` succeeds *before* enabling the native plug-in. Do not disable `syncModels` to mask a broken proxy or an OAuth failure. `models` is the Codey route allow-list: synchronization validates those IDs against the authenticated catalog and imports their capability metadata, but never appends unrelated catalog models. The proxy API continues to expose the complete account catalog.
 
 ## Security and deployment notes
 
@@ -44,4 +44,4 @@ Start and authenticate the Rust proxy on this loopback port, then refresh `GET /
 
 ## Validation gates
 
-New regression tests cover a 36-item model directory, priority retention, host's 32-model limit, no phantom models, and the high-port default. CI must pass proxy, native ABI, package and isolated installation tests for all available platforms. CI tests do not prove live Google account entitlement or Codey GUI operation.
+New regression tests cover a 36-item model directory, exact declared-model filtering, reasoning-effort metadata, no phantom models, and the high-port default. CI must pass proxy, native ABI, package and isolated installation tests for all available platforms. CI tests do not prove live Google account entitlement or Codey GUI operation.
