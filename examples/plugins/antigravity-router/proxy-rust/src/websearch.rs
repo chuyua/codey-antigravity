@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-const SYSTEM: &str = "You are an expert deep-research investigator and technical analyst. Use Google Search Grounding for rich, high-signal, multi-perspective facts. Formulate distinct targeted queries; prioritize technical details, benchmarks, developer issues and community feedback. Structure clean Markdown with direct source citations.";
+const SYSTEM: &str = "You are a careful research assistant using Google Search grounding. Return a compact evidence brief with exactly these sections: Findings, Gaps, Next checks. Verify each claim at its original source. Prefer primary documentation, exact names and constraints. Put unsupported facts under Gaps. Keep the result short enough for an interactive agent tool call.";
 pub const SEARCH_TIMEOUT_SECS: u64 = 90;
 // v0.10 preference order; candidates still require this account's live directory.
 const SEARCH_MODEL_FALLBACKS: [&str; 3] = [
@@ -98,7 +98,7 @@ pub fn build_search_request(opts: &SearchOptions, model: &str, project: &str) ->
         None,
         None,
     );
-    json!({"project":project,"model":model,"request":{"systemInstruction":{"role":"user","parts":[{"text":system}]},"contents":[{"role":"user","parts":[{"text":prompt}]}],"tools":tools,"generationConfig":{"thinkingConfig":{"thinkingBudget":if opts.thinking {4096} else {2048},"includeThoughts":false}}},"requestType":"agent","userAgent":"antigravity","requestId":id})
+    json!({"project":project,"model":model,"request":{"systemInstruction":{"role":"user","parts":[{"text":system}]},"contents":[{"role":"user","parts":[{"text":prompt}]}],"tools":tools,"generationConfig":{"thinkingConfig":{"thinkingBudget":if opts.thinking {4096} else {0},"includeThoughts":false}}},"requestType":"agent","userAgent":"antigravity","requestId":id})
 }
 pub fn parse_search_response(data: &Value) -> Value {
     let data = data.get("response").unwrap_or(data);
@@ -437,6 +437,12 @@ mod tests {
         assert_eq!(
             v["request"]["generationConfig"]["thinkingConfig"]["thinkingBudget"],
             4096
+        );
+        let default_opts = SearchOptions::from_value(&json!({"query":"short lookup"})).unwrap();
+        let default_request = build_search_request(&default_opts, "gemini-3.5-flash-lite", "p");
+        assert_eq!(
+            default_request["request"]["generationConfig"]["thinkingConfig"]["thinkingBudget"], 0,
+            "v0.10.0 interactive search defaults to zero thinking budget"
         );
         let r = parse_search_response(
             &json!({"response":{"candidates":[{"content":{"parts":[{"text":"hidden","thought":true},{"text":"answer"}]},"groundingMetadata":{"webSearchQueries":["q",5],"groundingChunks":[{"web":{"uri":"https://example.com","title":"example"}}]}}]}}),

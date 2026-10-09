@@ -79,7 +79,7 @@ jobs:
       - name: Test precompiled release ABI, proxy and isolated installation
         run: >-
           python examples/plugins/antigravity-router/scripts/test-artifact.py
-          examples/plugins/antigravity-router/dist/linux-x64/codey-antigravity-0.9.0-linux-x64
+          examples/plugins/antigravity-router/dist/linux-x64/codey-antigravity-0.10.0-linux-x64
       - name: Upload plugin packages for review
         uses: actions/upload-artifact@v4
         with:
@@ -127,7 +127,7 @@ jobs:
         run: ./examples/plugins/antigravity-router/scripts/build-release.ps1
       - name: Test precompiled release ABI, proxy and isolated installation
         shell: powershell
-        run: python examples/plugins/antigravity-router/scripts/test-artifact.py ./examples/plugins/antigravity-router/dist/windows-x64/codey-antigravity-0.9.0-windows-x64
+        run: python examples/plugins/antigravity-router/scripts/test-artifact.py ./examples/plugins/antigravity-router/dist/windows-x64/codey-antigravity-0.10.0-windows-x64
       - name: Upload plugin packages for review
         uses: actions/upload-artifact@v4
         with:
@@ -185,7 +185,7 @@ jobs:
       - name: Test precompiled release ABI, proxy and isolated installation
         run: >-
           python examples/plugins/antigravity-router/scripts/test-artifact.py
-          examples/plugins/antigravity-router/dist/macos-${{ matrix.label }}/codey-antigravity-0.9.0-macos-${{ matrix.label }}
+          examples/plugins/antigravity-router/dist/macos-${{ matrix.label }}/codey-antigravity-0.10.0-macos-${{ matrix.label }}
       - name: Upload plugin packages for review
         uses: actions/upload-artifact@v4
         with:

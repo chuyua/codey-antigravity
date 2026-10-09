@@ -86,7 +86,7 @@ fn abi_route_scoping_and_destroy() {
         json!({"routeId":"our-route","syncModels":false}),
     )
     .unwrap();
-    assert_eq!(invoke(&mut n, "ping", json!({}))["version"], "0.9.0");
+    assert_eq!(invoke(&mut n, "ping", json!({}))["version"], "0.10.0");
     let route = invoke(&mut n, "provider.describe", json!({}));
     assert_eq!(route["name"], "Antigravity");
     assert_eq!(route["baseUrl"], "http://127.0.0.1:8787/v1");

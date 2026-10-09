@@ -4,7 +4,7 @@ $ErrorActionPreference='Stop'
 if (!$ExePath) { $ExePath=Join-Path $PSScriptRoot 'bin/antigravity-proxy.exe'; if (!(Test-Path -LiteralPath $ExePath)) {$ExePath=Join-Path $PSScriptRoot 'proxy-rust/target/release/antigravity-proxy.exe'} }
 $ExePath=(Resolve-Path -LiteralPath $ExePath).Path
 $AuthPath=(Resolve-Path -LiteralPath $AuthPath).Path
-if ((& $ExePath --version) -ne 'antigravity-proxy 0.9.0') {throw 'Unexpected proxy version'}
+if ((& $ExePath --version) -ne 'antigravity-proxy 0.10.0') {throw 'Unexpected proxy version'}
 if ($LASTEXITCODE -ne 0) {throw 'Proxy version check failed'}
 New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
 $StateDir=(Resolve-Path -LiteralPath $StateDir).Path

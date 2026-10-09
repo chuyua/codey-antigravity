@@ -389,7 +389,7 @@ impl Plugin for AntigravityRouter {
             }
             "request.completed" | "request.failed" | "request.cancelled" => Ok(json!({})),
             "ping" => Ok(
-                json!({"plugin":"antigravity-router","version":"0.9.0","lifecycleEnabled":self.lifecycle_enabled,"syncModels":self.sync_models,"declareHostCapabilities":self.declare_host_capabilities,"declareWebsockets":self.declare_websockets,"catalogSource":self.catalog_source}),
+                json!({"plugin":"antigravity-router","version":"0.10.0","lifecycleEnabled":self.lifecycle_enabled,"syncModels":self.sync_models,"declareHostCapabilities":self.declare_host_capabilities,"declareWebsockets":self.declare_websockets,"catalogSource":self.catalog_source}),
             ),
             _ => Err(format!("unknown method: {method}")),
         }

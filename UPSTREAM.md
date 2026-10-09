@@ -9,6 +9,15 @@
 - 本地实现：Rust 代理；这是协议与行为迁移，不能用 Git 提交关系推断已同步所有上游变化。
 - 上游代理许可：MIT，保留 Rahul Arya 的署名，见 [proxy-rust/LICENSE](examples/plugins/antigravity-router/proxy-rust/LICENSE)。
 
+## 0.10.0 下游版本与完整性边界
+
+本项目把**下游发行版本**对齐到 `0.10.0`，表示基于上游 `v0.10.0` 的 Codey 兼容发行，不代表 Pi 插件源码或全部 Pi 专用 API 已原样合并。与上游发行说明逐项核对后的结论：
+
+- 已适配核心协议：UTF-8 引用、signed-int64 会话 ID、`image_gen` 请求格式、搜索候选回退、流式错误识别；`v0.10.0` 中 Google 搜索默认推理预算 `0` 与简洁证据摘要也已对齐。
+- Codey 的插件注册、能力声明和本地 Rust HTTP 图片代理使用不同于 Pi 的宿主 API；Pi 原生 `generateImages`、Pi `config` 扩展资源开关和 Pi footer 的 `(sub)` 标记**不是** Codey 插件现有功能，不可宣称全部功能移植。
+- Google 账号出现 `VALIDATION_REQUIRED` 时携带受限验证 URL 的用户提示尚待 Codey 侧安全移植与测试。Codey 原生搜索和远程加密压缩尚未验证/实现，相关宿主能力保持默认关闭。真实 Google 账号及 Codey UI 仍须独立验收。
+- 旧 `v0.9.0-rc.1` 是历史候选包，仍保留供溯源；`0.10.0` 必须通过对应新提交的完整 CI、实际二进制验收并重新打包，不以旧包换版本标签。
+
 ## 选择性移植
 
 | 上游变更 | 使用的提交 | 本仓库处理 |
