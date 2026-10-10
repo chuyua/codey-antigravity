@@ -27,6 +27,8 @@ $env:ANTIGRAVITY_CLIENT_SECRET = '<authorized-oauth-client-secret>'
 默认 `syncModels=true`：启用前先运行代理并刷新其模型目录（`GET http://127.0.0.1:28787/v1/models?refresh=1`）。`models` 始终是插件向 Codey 声明的模型列表，最多 32 个；同步只验证这些模型当前账号确实可用，并同步上游提供的思考档位和窗口等元数据，不会把代理目录中的其他模型自动追加进线路。首次读取失败会阻止线路注册；同一运行实例随后读取失败时保留最后成功结果。代理 `/v1/models` 仍保留完整真实目录。只有明确不需要目录校验和能力同步时才设 `syncModels=false`。
 
 
+**Windows 无窗口后台启动（可选）**：安装 Python 3 后，双击 `background_proxy.pyw` 可无控制台启动代理；或运行 `py -3 background_proxy.py start|status|stop|restart` 管理。脚本复用已校验 PID、进程创建时间和端口归属的 PowerShell 启停逻辑，不保存令牌、不增加 Python 后端服务。`py -3 background_proxy.py autorun-on` 可自愿启用当前用户登录后无窗口启动，`autorun-off` 可关闭；它只写入当前用户的 HKCU Run 项，不创建计划任务。**若已有针对 28787 的登录计划任务，应在确认新方式可用后停用旧任务，避免两种自启动方式冲突。**
+
 **Windows 代理连接检查**：首次安装先确认 `http://127.0.0.1:28787/health` 正常，再调用 `http://127.0.0.1:28787/v1/models?refresh=1` 预热，并通过 `http://127.0.0.1:28787/v1/models?cached=1` 确认模型目录可用。导入插件后检查 `baseUrl=http://127.0.0.1:28787/v1` 和 `syncModels=true`。如果启动终端退出会使代理停止，可选择手动运行或配置当前用户的后台启动方式；计划任务不是插件必需项。
 
 默认情况下插件只输出已发布 Codey 能识别的描述字段，不需要任何宿主补丁即可注册线路。已发布 Codey 会对未知字段直接拒绝整份描述，所以能力字段默认全部关闭：`declareHostCapabilities=true` 才输出 `modelContexts` 和固定为 `false` 的 `supportsRemoteCompaction` / `supportsNativeWebSearch`；`declareWebsockets=true`（需先打开前者）才额外声明 `supportsWebsockets=true`。代理未实现 `/v1/responses/compact`，也没有验证 Codey 原生搜索结果与引用契约，因此这两项不会声明为支持。

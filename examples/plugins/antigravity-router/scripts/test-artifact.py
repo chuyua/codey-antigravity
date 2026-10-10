@@ -40,6 +40,9 @@ def main():
                 raise SystemExit(f'Unsafe source archive entry: {item.filename}')
     print('PASS source archive: no traversal, duplicate entries, links or credential files', flush=True)
     if windows:
+        for helper in ('background_proxy.py', 'background_proxy.pyw'):
+            if not (bundle / helper).is_file():
+                raise SystemExit(f'Missing Windows windowless helper: {helper}')
         run('powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
             bundle / 'scripts/verify-bundle.ps1', '-Bundle', bundle)
     else:
