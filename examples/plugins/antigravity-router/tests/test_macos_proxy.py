@@ -26,8 +26,11 @@ class MacLaunchAgentTests(unittest.TestCase):
             patch.object(M, "AUTH", home / ".pi/agent/auth.json"),
             patch.object(M, "EXE", home / "bin/antigravity-proxy"),
             patch.object(M, "mac_only"),
-            patch.object(M.os, "getuid", create=True, return_value=0),
         ]
+        # Windows has no getuid and reports a synthetic st_uid; on actual
+        # macOS preserve the real UID so file ownership checks are exercised.
+        if os.name == "nt":
+            self.patches.append(patch.object(M.os, "getuid", create=True, return_value=0))
         for pt in self.patches:
             pt.start()
             self.addCleanup(pt.stop)
