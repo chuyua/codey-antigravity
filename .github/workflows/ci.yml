@@ -179,6 +179,8 @@ jobs:
         run: ./examples/plugins/antigravity-router/scripts/test.sh
       - name: Test native package validation rules
         run: python -m unittest discover -s scripts -p test_package_plugin.py
+      - name: Test macOS LaunchAgent configuration and safeguards
+        run: python -m unittest discover -s examples/plugins/antigravity-router/tests -p test_macos_proxy.py
       - name: Build native and portable macOS packages
         run: >-
           ./examples/plugins/antigravity-router/scripts/build-release.sh

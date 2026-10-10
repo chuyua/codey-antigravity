@@ -39,6 +39,8 @@ def main():
                     or stat.S_ISLNK(item.external_attr >> 16)):
                 raise SystemExit(f'Unsafe source archive entry: {item.filename}')
     print('PASS source archive: no traversal, duplicate entries, links or credential files', flush=True)
+    if sys.platform == 'darwin' and not (bundle / 'macos_proxy.py').is_file():
+        raise SystemExit('Missing macOS LaunchAgent helper')
     if windows:
         for helper in ('background_proxy.py', 'background_proxy.pyw'):
             if not (bundle / helper).is_file():
