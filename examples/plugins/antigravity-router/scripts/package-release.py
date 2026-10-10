@@ -92,14 +92,10 @@ shutil.copy2(proxy, bundle / 'bin' / spec['proxy'])
 # Per-platform documentation and runtime entrypoints.
 shared_docs = ('README.md', 'INSTALL.md', 'BUILDING.md', 'NOTICE.md', 'LICENSE')
 if spec['runtime'] == 'powershell':
-    entrypoints = ('start-proxy.ps1', 'stop-proxy.ps1',
-                   'background_proxy.py', 'background_proxy.pyw')
+    entrypoints = ('proxy_manager.py', 'start-proxy.ps1', 'stop-proxy.ps1')
     script_files = ('runtime.ps1', 'install.ps1', 'verify-bundle.ps1', 'LICENSE')
-elif spec['platform'] == 'macos':
-    entrypoints = ('start-proxy.sh', 'stop-proxy.sh', 'macos_proxy.py')
-    script_files = ('runtime.sh', 'install.sh', 'verify-bundle.sh', 'LICENSE')
 else:
-    entrypoints = ('start-proxy.sh', 'stop-proxy.sh')
+    entrypoints = ('proxy_manager.py', 'start-proxy.sh', 'stop-proxy.sh')
     script_files = ('runtime.sh', 'install.sh', 'verify-bundle.sh', 'LICENSE')
 for filename in shared_docs + entrypoints:
     destination = bundle / filename
@@ -128,7 +124,7 @@ with tempfile.TemporaryDirectory(prefix='codey-antigravity-source-') as temp:
     for filename in (
         'Cargo.toml', 'config.json', 'README.md', 'INSTALL.md', 'BUILDING.md',
         'NOTICE.md', 'LICENSE', '.gitignore', 'start-proxy.ps1', 'stop-proxy.ps1',
-        'background_proxy.py', 'background_proxy.pyw', 'macos_proxy.py',
+        'proxy_manager.py',
         'start-proxy.sh', 'stop-proxy.sh',
     ):
         origin = example / filename

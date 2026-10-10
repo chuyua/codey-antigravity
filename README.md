@@ -14,7 +14,7 @@
 
 - **本地 OAuth 代理**：浏览器登录、自动刷新及多账号管理；Google 令牌保留在本机，而不是写进 Codey 的 OpenAI Key。
 - **模型发现与路由**：从当前已登录账号获取模型目录，按账号/项目校验，并把 Responses 请求转换给上游。
-- **Windows 无窗口启动**：便携包提供 Python 标准库辅助入口，复用原有 Rust 代理和安全启停脚本，不依赖额外后台服务。
+- **跨平台统一后台管理**：三个便携包均提供同一个 `proxy_manager.py`，支持 `start / stop / restart / status / autorun-on / autorun-off`。Windows 以 Pythonw 无窗口启动，macOS 使用 LaunchAgent，Linux 使用用户级 systemd 或安全 Shell 脚本；均复用 Rust 代理，不增加常驻 Python 后端。
 - **工具与诊断**：支持显式搜索、图片生成、用量查询与健康检查；敏感能力默认为关闭或受控启用。
 - **多平台**：Windows x64、Linux x64、macOS Apple Silicon (arm64)；**不提供 macOS Intel 包**。
 
@@ -41,7 +41,7 @@ Invoke-RestMethod 'http://127.0.0.1:28787/v1/models?refresh=1'
 4. 插件导入不会自动启动代理，也不会自动登录。停用插件亦不会自动结束代理进程。
 
 
-**macOS / Linux：** 使用对应的 arm64 / x64 发行包；解压后按 [POSIX 安装流程](examples/plugins/antigravity-router/INSTALL.md#macos--linux) 运行 `./scripts/install.sh`、`./bin/antigravity-proxy login --manual` 和 `./start-proxy.sh`。**macOS arm64** 还可使用 `python3 macos_proxy.py autorun-on` 配置基于当前用户 `launchd` 的无窗口登录自启动；OAuth 客户端凭据从 macOS 登录钥匙串读取，不存进 plist（需先按安装指南准备两项 Keychain 密码项目）。Mac 实机登录验收仍需在设备在线后执行。macOS 发行包未进行 Apple 签名或公证。
+**macOS / Linux：** 使用对应的 arm64 / x64 发行包；解压后按 [POSIX 安装流程](examples/plugins/antigravity-router/INSTALL.md#macos--linux) 运行 `./scripts/install.sh`、`./bin/antigravity-proxy login --manual` 和 `./start-proxy.sh`。**macOS arm64** 还可使用 `python3 proxy_manager.py autorun-on` 配置基于当前用户 `launchd` 的无窗口登录自启动；OAuth 客户端凭据从 macOS 登录钥匙串读取，不存进 plist（需先按安装指南准备两项 Keychain 密码项目）。Mac 实机登录验收仍需在设备在线后执行。macOS 发行包未进行 Apple 签名或公证。
 
 ## 常用命令和排查
 
