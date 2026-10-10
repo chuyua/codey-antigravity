@@ -27,7 +27,7 @@ $env:ANTIGRAVITY_CLIENT_SECRET = '<authorized-oauth-client-secret>'
 默认 `syncModels=true`：启用前先运行代理并刷新其模型目录（`GET http://127.0.0.1:28787/v1/models?refresh=1`）。`models` 始终是插件向 Codey 声明的模型列表，最多 32 个；同步只验证这些模型当前账号确实可用，并同步上游提供的思考档位和窗口等元数据，不会把代理目录中的其他模型自动追加进线路。首次读取失败会阻止线路注册；同一运行实例随后读取失败时保留最后成功结果。代理 `/v1/models` 仍保留完整真实目录。只有明确不需要目录校验和能力同步时才设 `syncModels=false`。
 
 
-**Windows 无窗口后台启动（可选）**：安装 Python 3 后，双击 `background_proxy.pyw` 可无控制台启动代理；或运行 `py -3 background_proxy.py start|status|stop|restart` 管理。脚本复用已校验 PID、进程创建时间和端口归属的 PowerShell 启停逻辑，不保存令牌、不增加 Python 后端服务。`py -3 background_proxy.py autorun-on` 可自愿启用当前用户登录后无窗口启动，`autorun-off` 可关闭；它只写入当前用户的 HKCU Run 项，不创建计划任务。**若已有针对 28787 的登录计划任务，应在确认新方式可用后停用旧任务，避免两种自启动方式冲突。**
+**Windows 无窗口后台启动（可选）**：安装 Python 3 后，使用 `pythonw.exe proxy_manager.py start` 可无控制台启动代理；或运行 `py -3 proxy_manager.py start|status|stop|restart` 管理。脚本复用已校验 PID、进程创建时间和端口归属的 PowerShell 启停逻辑，不保存令牌、不增加 Python 后端服务。`py -3 proxy_manager.py autorun-on` 可自愿启用当前用户登录后无窗口启动，`autorun-off` 可关闭；它只写入当前用户的 HKCU Run 项，不创建计划任务。**若已有针对 28787 的登录计划任务，应在确认新方式可用后停用旧任务，避免两种自启动方式冲突。**
 
 **Windows 代理连接检查**：首次安装先确认 `http://127.0.0.1:28787/health` 正常，再调用 `http://127.0.0.1:28787/v1/models?refresh=1` 预热，并通过 `http://127.0.0.1:28787/v1/models?cached=1` 确认模型目录可用。导入插件后检查 `baseUrl=http://127.0.0.1:28787/v1` 和 `syncModels=true`。如果启动终端退出会使代理停止，可选择手动运行或配置当前用户的后台启动方式；计划任务不是插件必需项。
 
@@ -70,21 +70,34 @@ curl -fsS 'http://127.0.0.1:28787/v1/models?refresh=1'
 
 ### macOS 原生后台运行（Apple Silicon，可选）
 
-macOS 版便携包提供 `macos_proxy.py`，使用系统的 **LaunchAgent（launchd）** 在当前用户登录后无 Terminal 窗口地运行。Python 从用户登录钥匙串读取已授权 OAuth 客户端 ID 与 Secret，然后直接以 Rust 代理取代自身进程；没有第二个常驻 Python 服务。端口仍是 `127.0.0.1:28787`，账号路径为 `~/.pi/agent/auth.json`。登录项位于 `~/Library/LaunchAgents/com.chuyua.codey-antigravity.proxy.plist`，不使用 root、sudo 或系统级 Daemon。
+跨平台便携包统一提供 `proxy_manager.py`；macOS 后台模式，使用系统的 **LaunchAgent（launchd）** 在当前用户登录后无 Terminal 窗口地运行。Python 从用户登录钥匙串读取已授权 OAuth 客户端 ID 与 Secret，然后直接以 Rust 代理取代自身进程；没有第二个常驻 Python 服务。端口仍是 `127.0.0.1:28787`，账号路径为 `~/.pi/agent/auth.json`。登录项位于 `~/Library/LaunchAgents/com.chuyua.codey-antigravity.proxy.plist`，不使用 root、sudo 或系统级 Daemon。
 
 **首次启用**：先完成上面的手动 Google 登录。在 macOS「钥匙串访问」的**登录钥匙串**新建两个「密码项目」，账户名称均为 `id -un` 返回的 macOS 用户短名，项目名称分别为 `com.chuyua.codey-antigravity.oauth-client-id` 和 `com.chuyua.codey-antigravity.oauth-client-secret`，密码分别填自己的已授权 OAuth Client ID 和 Secret。首次读取可能弹出钥匙串授权提示。不要将密钥写进 plist、命令行、Git 或 Codey API Key。
 
 先关闭当前手动启动的同端口代理（按需使用 `./stop-proxy.sh`），然后在 Mac 安装目录运行：
 
 ```bash
-python3 macos_proxy.py autorun-on     # 配置并加载用户 LaunchAgent
-python3 macos_proxy.py status         # 检查 launchd 和 /health
-python3 macos_proxy.py restart        # 重启代理
-python3 macos_proxy.py stop           # 本次停止，下次登录仍自动启动
-python3 macos_proxy.py start          # 手动恢复
-python3 macos_proxy.py autorun-off    # 取消登录自动启动，保留 OAuth 数据
+python3 proxy_manager.py autorun-on     # 配置并加载用户 LaunchAgent
+python3 proxy_manager.py status         # 检查 launchd 和 /health
+python3 proxy_manager.py restart        # 重启代理
+python3 proxy_manager.py stop           # 本次停止，下次登录仍自动启动
+python3 proxy_manager.py start          # 手动恢复
+python3 proxy_manager.py autorun-off    # 取消登录自动启动，保留 OAuth 数据
 ```
 
 此工具依赖 `launchctl bootstrap gui/$(id -u)`：必须处于当前用户的 macOS 图形登录会话，不支持仅 SSH 或 root 环境。出现错误检查 `~/Library/Application Support/CodeyAntigravity/runtime/launchd.stderr.log`。如果钥匙串项目缺失则拒绝启用，不会把凭据降级写入明文配置。移动安装目录或更换 Python 解释器前，先执行 `autorun-off`，再重新安装。真实 Mac 登录及 Keychain 解锁仍需在目标电脑上最终测试。
 
-在代理运行期间导入对应平台 `.codey-plugin`。手动 Shell 启动可使用 `--port`、`--auth`、`--state-dir` 自定义；**LaunchAgent 当前固定使用 28787 和默认账号路径**。Apple 产物仅提供 arm64 包，未做 Apple 签名或公证；不提供 macOS Intel 包。
+在代理运行期间导入对应平台 `.codey-plugin`。手动 Shell 启动可使用 `--port`、`--auth`、`--state-dir` 自定义；**统一管理器的后台服务固定使用 28787 与默认账号路径**。Apple 产物仅提供 arm64 包，未做 Apple 签名或公证；不提供 macOS Intel 包。
+
+### Linux 用户后台运行（可选）
+
+Linux x64 也使用同一个 `proxy_manager.py`。默认 `start` / `stop` 复用原有 PID 与端口身份检查的 Shell 脚本。桌面用户若具备 `systemd --user` 和 `secret-tool`（Secret Service），可以启用用户级后台服务，不使用 root、sudo，也没有额外常驻 Python。Linux 用户需要预先将已授权 OAuth Client ID 与 Secret 安全保存为两条 Secret Service 项目：属性分别为 `service=com.chuyua.codey-antigravity.oauth-client-id` 和 `service=com.chuyua.codey-antigravity.oauth-client-secret`。密钥不会存入 systemd unit 或 Git。
+
+```bash
+python3 proxy_manager.py autorun-on
+python3 proxy_manager.py status
+python3 proxy_manager.py restart
+python3 proxy_manager.py autorun-off
+```
+
+用户服务文件位于 `~/.config/systemd/user/codey-antigravity-proxy.service`。无桌面会话、无法解锁 Secret Service 或缺少 systemd 的 Linux 环境仍可使用现有 Shell 脚本；登录启动功能在目标 Linux 用户会话中另行验收。Windows、Mac、Linux 的统一管理命令相同，但各自调用操作系统原生后台机制。

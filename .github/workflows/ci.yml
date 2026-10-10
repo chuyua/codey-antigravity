@@ -71,8 +71,8 @@ jobs:
         run: ./examples/plugins/antigravity-router/scripts/test.sh
       - name: Test native package validation rules
         run: python -m unittest discover -s scripts -p test_package_plugin.py
-      - name: Test optional Windows background launcher
-        run: python -m unittest discover -s examples/plugins/antigravity-router/tests -p test_background_proxy.py
+      - name: Test unified cross-platform proxy manager
+        run: python -m unittest discover -s examples/plugins/antigravity-router/tests -p test_proxy_manager.py
       - name: Build native and portable Linux packages
         run: >-
           ./examples/plugins/antigravity-router/scripts/build-release.sh
@@ -124,6 +124,8 @@ jobs:
         run: ./examples/plugins/antigravity-router/scripts/test.ps1
       - name: Test native package validation rules
         run: python -m unittest discover -s scripts -p test_package_plugin.py
+      - name: Test unified cross-platform proxy manager
+        run: python -m unittest discover -s examples/plugins/antigravity-router/tests -p test_proxy_manager.py
       - name: Build native and portable Windows packages
         shell: powershell
         run: ./examples/plugins/antigravity-router/scripts/build-release.ps1
@@ -179,8 +181,8 @@ jobs:
         run: ./examples/plugins/antigravity-router/scripts/test.sh
       - name: Test native package validation rules
         run: python -m unittest discover -s scripts -p test_package_plugin.py
-      - name: Test macOS LaunchAgent configuration and safeguards
-        run: python -m unittest discover -s examples/plugins/antigravity-router/tests -p test_macos_proxy.py
+      - name: Test unified cross-platform proxy manager
+        run: python -m unittest discover -s examples/plugins/antigravity-router/tests -p test_proxy_manager.py
       - name: Build native and portable macOS packages
         run: >-
           ./examples/plugins/antigravity-router/scripts/build-release.sh
