@@ -68,4 +68,23 @@ curl -fsS 'http://127.0.0.1:28787/v1/models?refresh=1'
 ./stop-proxy.sh
 ```
 
-在代理运行期间导入对应平台 `.codey-plugin`。自定义启动参数为 `--port`、`--auth`、`--state-dir`；账号、目录预热、能力默认与升级步骤同 Windows。Apple 产物仅提供 arm64 包，未做 Apple 签名或公证；不提供 macOS Intel 包。
+### macOS 原生后台运行（Apple Silicon，可选）
+
+macOS 版便携包提供 `macos_proxy.py`，使用系统的 **LaunchAgent（launchd）** 在当前用户登录后无 Terminal 窗口地运行。Python 从用户登录钥匙串读取已授权 OAuth 客户端 ID 与 Secret，然后直接以 Rust 代理取代自身进程；没有第二个常驻 Python 服务。端口仍是 `127.0.0.1:28787`，账号路径为 `~/.pi/agent/auth.json`。登录项位于 `~/Library/LaunchAgents/com.chuyua.codey-antigravity.proxy.plist`，不使用 root、sudo 或系统级 Daemon。
+
+**首次启用**：先完成上面的手动 Google 登录。在 macOS「钥匙串访问」的**登录钥匙串**新建两个「密码项目」，账户名称均为 `id -un` 返回的 macOS 用户短名，项目名称分别为 `com.chuyua.codey-antigravity.oauth-client-id` 和 `com.chuyua.codey-antigravity.oauth-client-secret`，密码分别填自己的已授权 OAuth Client ID 和 Secret。首次读取可能弹出钥匙串授权提示。不要将密钥写进 plist、命令行、Git 或 Codey API Key。
+
+先关闭当前手动启动的同端口代理（按需使用 `./stop-proxy.sh`），然后在 Mac 安装目录运行：
+
+```bash
+python3 macos_proxy.py autorun-on     # 配置并加载用户 LaunchAgent
+python3 macos_proxy.py status         # 检查 launchd 和 /health
+python3 macos_proxy.py restart        # 重启代理
+python3 macos_proxy.py stop           # 本次停止，下次登录仍自动启动
+python3 macos_proxy.py start          # 手动恢复
+python3 macos_proxy.py autorun-off    # 取消登录自动启动，保留 OAuth 数据
+```
+
+此工具依赖 `launchctl bootstrap gui/$(id -u)`：必须处于当前用户的 macOS 图形登录会话，不支持仅 SSH 或 root 环境。出现错误检查 `~/Library/Application Support/CodeyAntigravity/runtime/launchd.stderr.log`。如果钥匙串项目缺失则拒绝启用，不会把凭据降级写入明文配置。移动安装目录或更换 Python 解释器前，先执行 `autorun-off`，再重新安装。真实 Mac 登录及 Keychain 解锁仍需在目标电脑上最终测试。
+
+在代理运行期间导入对应平台 `.codey-plugin`。手动 Shell 启动可使用 `--port`、`--auth`、`--state-dir` 自定义；**LaunchAgent 当前固定使用 28787 和默认账号路径**。Apple 产物仅提供 arm64 包，未做 Apple 签名或公证；不提供 macOS Intel 包。

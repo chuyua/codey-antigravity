@@ -41,7 +41,7 @@ Invoke-RestMethod 'http://127.0.0.1:28787/v1/models?refresh=1'
 4. 插件导入不会自动启动代理，也不会自动登录。停用插件亦不会自动结束代理进程。
 
 
-**macOS / Linux：** 使用对应的 arm64 / x64 发行包；解压后按 [安装指南中的 POSIX 流程](examples/plugins/antigravity-router/INSTALL.md#macos--linux) 运行 `./scripts/install.sh`、`./bin/antigravity-proxy login --manual` 和 `./start-proxy.sh`。macOS 发行包未进行 Apple 签名或公证。
+**macOS / Linux：** 使用对应的 arm64 / x64 发行包；解压后按 [POSIX 安装流程](examples/plugins/antigravity-router/INSTALL.md#macos--linux) 运行 `./scripts/install.sh`、`./bin/antigravity-proxy login --manual` 和 `./start-proxy.sh`。**macOS arm64** 还可使用 `python3 macos_proxy.py autorun-on` 配置基于当前用户 `launchd` 的无窗口登录自启动；OAuth 客户端凭据从 macOS 登录钥匙串读取，不存进 plist（需先按安装指南准备两项 Keychain 密码项目）。Mac 实机登录验收仍需在设备在线后执行。macOS 发行包未进行 Apple 签名或公证。
 
 ## 常用命令和排查
 

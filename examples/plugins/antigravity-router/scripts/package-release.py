@@ -95,6 +95,9 @@ if spec['runtime'] == 'powershell':
     entrypoints = ('start-proxy.ps1', 'stop-proxy.ps1',
                    'background_proxy.py', 'background_proxy.pyw')
     script_files = ('runtime.ps1', 'install.ps1', 'verify-bundle.ps1', 'LICENSE')
+elif spec['platform'] == 'macos':
+    entrypoints = ('start-proxy.sh', 'stop-proxy.sh', 'macos_proxy.py')
+    script_files = ('runtime.sh', 'install.sh', 'verify-bundle.sh', 'LICENSE')
 else:
     entrypoints = ('start-proxy.sh', 'stop-proxy.sh')
     script_files = ('runtime.sh', 'install.sh', 'verify-bundle.sh', 'LICENSE')
@@ -125,7 +128,7 @@ with tempfile.TemporaryDirectory(prefix='codey-antigravity-source-') as temp:
     for filename in (
         'Cargo.toml', 'config.json', 'README.md', 'INSTALL.md', 'BUILDING.md',
         'NOTICE.md', 'LICENSE', '.gitignore', 'start-proxy.ps1', 'stop-proxy.ps1',
-        'background_proxy.py', 'background_proxy.pyw',
+        'background_proxy.py', 'background_proxy.pyw', 'macos_proxy.py',
         'start-proxy.sh', 'stop-proxy.sh',
     ):
         origin = example / filename
